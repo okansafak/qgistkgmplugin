@@ -47,6 +47,10 @@ STIL_BTN_ZOOM = (
     "QPushButton { background:#e65100; color:white; border-radius:4px; font-weight:bold; }"
     "QPushButton:hover { background:#bf360c; }"
 )
+STIL_FORM_ELEMENTS = (
+    "QComboBox, QLineEdit { background: #ffffff; color: #000000; padding: 4px; border: 1px solid #ccc; border-radius: 4px; }"
+    "QComboBox:disabled, QLineEdit:disabled { background: #f0f0f0; color: #888; }"
+)
 STIL_ACIKLAMA = "color: #555; font-size: 11px;"
 STIL_SONUC_KEY = "font-weight: bold; color: #444;"
 STIL_KATMAN = "color: #2c7a4b; font-size: 11px;"
@@ -78,11 +82,14 @@ class Ui_TKGMPanel:
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setFrameShape(QFrame.NoFrame)
-        self.scroll_area.setStyleSheet("background-color: transparent;")
+        # Stil temizlendi - alt bileşenlerin (Combo Box) görünmesini bozan şey buydu
         
         # İçerik Widget'ı
         self.container = QWidget()
         self.scroll_area.setWidget(self.container)
+        
+        # Form elemanları için genel stil uygula (okunabilirlik garantisi)
+        self.container.setStyleSheet(STIL_FORM_ELEMENTS)
         
         # DockWidget'in ana widget'ı olarak scroll area'yı ayarla
         dock_widget.setWidget(self.scroll_area)
