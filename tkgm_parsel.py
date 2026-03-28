@@ -4,9 +4,21 @@ QGIS'e menu ve toolbar entegrasyonu sağlar.
 """
 
 import os
-from qgis.PyQt.QtWidgets import QAction, QToolBar
+try:
+    from qgis.PyQt.QtGui import QAction
+except ImportError:
+    from qgis.PyQt.QtWidgets import QAction
+
+from qgis.PyQt.QtWidgets import QToolBar
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtCore import Qt
+
+try:
+    LeftDockWidgetArea = Qt.DockWidgetArea.LeftDockWidgetArea
+    RightDockWidgetArea = Qt.DockWidgetArea.RightDockWidgetArea
+except AttributeError:
+    LeftDockWidgetArea = Qt.LeftDockWidgetArea
+    RightDockWidgetArea = Qt.RightDockWidgetArea
 
 from .tkgm_panel import TKGMPanel
 
@@ -52,9 +64,9 @@ class TKGMParselPlugin:
             if self.panel is None:
                 self.panel = TKGMPanel(self.iface)
                 self.panel.setAllowedAreas(
-                    Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea
+                    LeftDockWidgetArea | RightDockWidgetArea
                 )
-                self.iface.addDockWidget(Qt.RightDockWidgetArea, self.panel)
+                self.iface.addDockWidget(RightDockWidgetArea, self.panel)
                 self.panel.visibilityChanged.connect(self._on_panel_visibility)
             else:
                 self.panel.show()

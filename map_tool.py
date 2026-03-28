@@ -8,6 +8,11 @@ from qgis.PyQt.QtCore import pyqtSignal
 from qgis.PyQt.QtGui import QCursor
 from qgis.PyQt.QtCore import Qt
 
+try:
+    CrossCursor = Qt.CursorShape.CrossCursor
+except AttributeError:
+    CrossCursor = Qt.CrossCursor
+
 
 class ParselTiklamaAraci(QgsMapTool):
     """Haritaya tıklandığında WGS84 koordinatını yayar."""
@@ -17,7 +22,7 @@ class ParselTiklamaAraci(QgsMapTool):
     def __init__(self, canvas):
         super().__init__(canvas)
         self.canvas = canvas
-        self.setCursor(QCursor(Qt.CrossCursor))
+        self.setCursor(QCursor(CrossCursor))
 
     def canvasReleaseEvent(self, event):
         point = self.toMapCoordinates(event.pos())

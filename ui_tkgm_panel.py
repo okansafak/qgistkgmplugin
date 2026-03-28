@@ -12,6 +12,13 @@ from qgis.PyQt.QtWidgets import (
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QFont
 
+try:
+    AlignCenter = Qt.AlignmentFlag.AlignCenter
+    TextSelectableByMouse = Qt.TextInteractionFlag.TextSelectableByMouse
+except AttributeError:
+    AlignCenter = Qt.AlignCenter
+    TextSelectableByMouse = Qt.TextSelectableByMouse
+
 
 # ─── Stil Sabitleri ──────────────────────────────────────────────────────────
 STIL_BASLIK = (
@@ -107,7 +114,7 @@ class Ui_TKGMPanel:
         baslik_font.setPointSize(11)
         baslik_font.setBold(True)
         baslik.setFont(baslik_font)
-        baslik.setAlignment(Qt.AlignCenter)
+        baslik.setAlignment(AlignCenter)
         baslik.setStyleSheet(STIL_BASLIK)
         layout.addWidget(baslik)
 
@@ -192,7 +199,7 @@ class Ui_TKGMPanel:
             lbl_key = QLabel(label + ":")
             lbl_key.setStyleSheet(STIL_SONUC_KEY)
             lbl_val = QLabel("—")
-            lbl_val.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            lbl_val.setTextInteractionFlags(TextSelectableByMouse)
             lbl_val.setWordWrap(True)
             gs.addWidget(lbl_key, idx, 0)
             gs.addWidget(lbl_val, idx, 1)
@@ -207,7 +214,7 @@ class Ui_TKGMPanel:
         # Katman bilgisi
         self.lbl_katman = QLabel()
         self.lbl_katman.setStyleSheet(STIL_KATMAN)
-        self.lbl_katman.setAlignment(Qt.AlignCenter)
+        self.lbl_katman.setAlignment(AlignCenter)
         gs.addWidget(self.lbl_katman, len(SONUC_SATIRLARI) + 1, 0, 1, 2)
 
         layout.addWidget(self.grp_sonuc)

@@ -18,7 +18,23 @@ from qgis.core import (
     QgsTextFormat,
     QgsTextBufferSettings,
 )
-from qgis.PyQt.QtCore import QVariant
+try:
+    from qgis.PyQt.QtCore import QVariant
+except ImportError:
+    class QVariant:
+        pass
+
+try:
+    from qgis.PyQt.QtCore import QMetaType
+    TYPE_STRING = QMetaType.Type.QString
+    TYPE_INT = QMetaType.Type.Int
+    TYPE_DOUBLE = QMetaType.Type.Double
+except AttributeError:
+    # Older PyQt5
+    TYPE_STRING = QVariant.String
+    TYPE_INT = QVariant.Int
+    TYPE_DOUBLE = QVariant.Double
+
 from qgis.PyQt.QtGui import QColor, QFont
 
 
@@ -67,15 +83,15 @@ def _get_or_create_layer() -> QgsVectorLayer:
     # Alanlar
     fields = QgsFields()
     for name, tip in [
-        ("mahalleKodu", QVariant.String),
-        ("adaNo",       QVariant.Int),
-        ("parselNo",    QVariant.Int),
-        ("alan",        QVariant.Double),
-        ("nitelik",     QVariant.String),
-        ("pafta",       QVariant.String),
-        ("il",          QVariant.String),
-        ("ilce",        QVariant.String),
-        ("mahalle",     QVariant.String),
+        ("mahalleKodu", TYPE_STRING),
+        ("adaNo",       TYPE_INT),
+        ("parselNo",    TYPE_INT),
+        ("alan",        TYPE_DOUBLE),
+        ("nitelik",     TYPE_STRING),
+        ("pafta",       TYPE_STRING),
+        ("il",          TYPE_STRING),
+        ("ilce",        TYPE_STRING),
+        ("mahalle",     TYPE_STRING),
     ]:
         fields.append(QgsField(name, tip))
 
