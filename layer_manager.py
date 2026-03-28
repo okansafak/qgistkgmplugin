@@ -18,10 +18,11 @@ from qgis.core import (
     QgsTextFormat,
     QgsTextBufferSettings,
 )
+from qgis.PyQt.QtCore import QVariant, Qt
 # QGIS 3 ve 4 uyumluluğu için en güvenli tip tanımlamaları
-TYPE_STRING = "String"
-TYPE_INT = "Integer"
-TYPE_DOUBLE = "Double"
+TYPE_STRING = QVariant.String
+TYPE_INT = QVariant.Int
+TYPE_DOUBLE = QVariant.Double
 
 from qgis.PyQt.QtGui import QColor, QFont
 
