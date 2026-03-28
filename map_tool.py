@@ -8,10 +8,16 @@ from qgis.PyQt.QtCore import pyqtSignal
 from qgis.PyQt.QtGui import QCursor
 from qgis.PyQt.QtCore import Qt
 
-try:
-    CrossCursor = Qt.CursorShape.CrossCursor
-except AttributeError:
-    CrossCursor = Qt.CrossCursor
+def _get_qt_flag(scope, name):
+    if hasattr(Qt, scope):
+        s = getattr(Qt, scope)
+        if hasattr(s, name):
+            return getattr(s, name)
+    if hasattr(Qt, name):
+        return getattr(Qt, name)
+    return 0
+
+CrossCursor = _get_qt_flag("CursorShape", "CrossCursor")
 
 
 class ParselTiklamaAraci(QgsMapTool):

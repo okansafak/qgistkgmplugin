@@ -13,12 +13,17 @@ from qgis.PyQt.QtWidgets import QToolBar
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtCore import Qt
 
-try:
-    LeftDockWidgetArea = Qt.DockWidgetArea.LeftDockWidgetArea
-    RightDockWidgetArea = Qt.DockWidgetArea.RightDockWidgetArea
-except AttributeError:
-    LeftDockWidgetArea = Qt.LeftDockWidgetArea
-    RightDockWidgetArea = Qt.RightDockWidgetArea
+def _get_qt_flag(scope, name):
+    if hasattr(Qt, scope):
+        s = getattr(Qt, scope)
+        if hasattr(s, name):
+            return getattr(s, name)
+    if hasattr(Qt, name):
+        return getattr(Qt, name)
+    return 0
+
+LeftDockWidgetArea = _get_qt_flag("DockWidgetArea", "LeftDockWidgetArea")
+RightDockWidgetArea = _get_qt_flag("DockWidgetArea", "RightDockWidgetArea")
 
 from .tkgm_panel import TKGMPanel
 

@@ -12,12 +12,21 @@ from qgis.PyQt.QtWidgets import (
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QFont
 
-try:
-    AlignCenter = Qt.AlignmentFlag.AlignCenter
-    TextSelectableByMouse = Qt.TextInteractionFlag.TextSelectableByMouse
-except AttributeError:
-    AlignCenter = Qt.AlignCenter
-    TextSelectableByMouse = Qt.TextSelectableByMouse
+def _get_qt_flag(scope, name, fallback_scope=None):
+    if hasattr(Qt, scope):
+        s = getattr(Qt, scope)
+        if hasattr(s, name):
+            return getattr(s, name)
+    if fallback_scope and hasattr(Qt, fallback_scope):
+        s = getattr(Qt, fallback_scope)
+        if hasattr(s, name):
+            return getattr(s, name)
+    if hasattr(Qt, name):
+        return getattr(Qt, name)
+    return 0
+
+AlignCenter = _get_qt_flag("AlignmentFlag", "AlignCenter", "Alignment")
+TextSelectableByMouse = _get_qt_flag("TextInteractionFlag", "TextSelectableByMouse", "TextInteraction")
 
 
 # ─── Stil Sabitleri ──────────────────────────────────────────────────────────
