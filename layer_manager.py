@@ -18,37 +18,10 @@ from qgis.core import (
     QgsTextFormat,
     QgsTextBufferSettings,
 )
-from qgis.PyQt.QtCore import Qt
-
-# QVariant/QMetaType uyumluluğu
-try:
-    from qgis.PyQt.QtCore import QVariant
-except ImportError:
-    QVariant = None
-
-def get_qgis_variant_type(type_name):
-    # QGIS 4 / Qt6
-    try:
-        from qgis.PyQt.QtCore import QMetaType
-        if type_name == "QString": return QMetaType.Type.QString
-        if type_name == "Int": return QMetaType.Type.Int
-        if type_name == "Double": return QMetaType.Type.Double
-    except (ImportError, AttributeError):
-        pass
-    
-    # QGIS 3 / PyQt5
-    if QVariant is not None:
-        try:
-            return getattr(QVariant, type_name)
-        except AttributeError:
-            pass
-    
-    # Fallback
-    return type_name
-
-TYPE_STRING = get_qgis_variant_type("String" if QVariant else "QString")
-TYPE_INT = get_qgis_variant_type("Int")
-TYPE_DOUBLE = get_qgis_variant_type("Double")
+# QGIS 3 ve 4 uyumluluğu için en güvenli tip tanımlamaları
+TYPE_STRING = "String"
+TYPE_INT = "Integer"
+TYPE_DOUBLE = "Double"
 
 from qgis.PyQt.QtGui import QColor, QFont
 
