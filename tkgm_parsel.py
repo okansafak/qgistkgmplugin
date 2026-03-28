@@ -39,6 +39,10 @@ class TKGMParselPlugin:
         self.iface.removeToolBarIcon(self.action)
 
         if self.panel:
+            # Eklenti reload edilirken harita aracının takılı kalmasını önle
+            if self.panel.btn_tikla_ac.isChecked():
+                self.panel.btn_tikla_ac.setChecked(False)
+            
             self.iface.removeDockWidget(self.panel)
             self.panel = None
 
@@ -50,7 +54,7 @@ class TKGMParselPlugin:
                 self.panel.setAllowedAreas(
                     Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea
                 )
-                self.iface.addDockWidget(Qt.LeftDockWidgetArea, self.panel)
+                self.iface.addDockWidget(Qt.RightDockWidgetArea, self.panel)
                 self.panel.visibilityChanged.connect(self._on_panel_visibility)
             else:
                 self.panel.show()
