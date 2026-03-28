@@ -1,20 +1,22 @@
-# 🗺 TKGM Parsel Sorgulama — QGIS Eklentisi
+# 🗺 TKGM Parsel Sorgulama — QGIS Eklentisi / QGIS Plugin
 
 TKGM (Tapu ve Kadastro Genel Müdürlüğü) CBS API'sini kullanarak QGIS ortamında **parsel sorgulama**, **geometri görüntüleme** ve **harita tıklama ile parsel bulma** işlemlerini gerçekleştiren bir QGIS eklentisidir.
 
+A QGIS plugin that performs **parcel inquiry**, **geometry visualization**, and **parcel finding via map clicks** in the QGIS environment using the TKGM (General Directorate of Land Registry and Cadastre) CBS API.
+
 ---
 
-## ✨ Özellikler
+## ✨ Özellikler / Features
 
-| Özellik | Açıklama |
+| Özellik / Feature | Açıklama / Description |
 |---|---|
-| 🏛 **İdari Birim Seçimi** | İl → İlçe → Mahalle kademeli dropdown listeleri (Türkçe alfabetik sıralı) |
-| 🔍 **Ada/Parsel Sorgusu** | Mahalle, Ada No ve Parsel No girerek detaylı parsel bilgisi sorgulama |
-| 🎯 **Harita Tıklama Modu** | Haritaya tıklayarak o noktadaki parseli otomatik sorgulama |
-| 🗺 **Geometri Görüntüleme** | Bulunan parselin çokgen (polygon) geometrisini QGIS katmanına ekleme |
-| 🔭 **Parsele Zoom** | Sorgulanan parsele otomatik yakınlaştırma |
-| 🏷 **Etiketleme** | Ada/Parsel numarasını harita üzerinde etiket olarak gösterme |
-| 📐 **CRS Desteği** | Farklı koordinat referans sistemleri arasında otomatik dönüşüm |
+| 🏛 **İdari Birim Seçimi / Administrative Selection** | İl → İlçe → Mahalle kademeli dropdown listeleri / Province → District → Neighborhood dropdowns |
+| 🔍 **Ada/Parsel Sorgusu / Plot Inquiry** | Mahalle, Ada No ve Parsel No girerek detaylı sorgulama / Detailed query by entering Plot and Parcel numbers |
+| 🎯 **Harita Tıklama Modu / Map Click Mode** | Haritaya tıklayarak o noktadaki parseli otomatik sorgulama / Automatically query the parcel at the clicked point |
+| 🗺 **Geometri Görüntüleme / Geometry Display** | Bulunan parselin çokgen geometrisini QGIS katmanına ekleme / Add parcel polygon geometry to QGIS layers |
+| 🔭 **Parsele Zoom / Zoom to Parcel** | Sorgulanan parsele otomatik yakınlaştırma / Automatic zoom to the queried parcel |
+| 🏷 **Etiketleme / Labeling** | Ada/Parsel numarasını harita üzerinde etiketleme / Labeling Plot/Parcel numbers on the map |
+| 📐 **CRS Desteği / CRS Support** | Farklı koordinat sistemleri arasında otomatik dönüşüm / Automatic conversion between different CRS |
 
 ---
 
