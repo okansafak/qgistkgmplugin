@@ -7,7 +7,7 @@ Controller mantığı tkgm_panel.py içindedir.
 from qgis.PyQt.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QComboBox, QLineEdit, QPushButton,
-    QGroupBox, QGridLayout, QFrame,
+    QGroupBox, QGridLayout, QFrame, QScrollArea,
 )
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QFont
@@ -74,13 +74,24 @@ class Ui_TKGMPanel:
 
     def setup_ui(self, dock_widget):
         """DockWidget üzerine tüm görsel öğeleri yerleştirir."""
-        container = QWidget()
-        dock_widget.setWidget(container)
+        # Ana Kaydırma Alanı (Scroll Area) oluştur
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QFrame.NoFrame)
+        self.scroll_area.setStyleSheet("background-color: transparent;")
+        
+        # İçerik Widget'ı
+        self.container = QWidget()
+        self.scroll_area.setWidget(self.container)
+        
+        # DockWidget'in ana widget'ı olarak scroll area'yı ayarla
+        dock_widget.setWidget(self.scroll_area)
         dock_widget.setMinimumWidth(310)
 
-        ana = QVBoxLayout(container)
-        ana.setContentsMargins(8, 8, 8, 8)
-        ana.setSpacing(6)
+        # Ana mizanpajı konteyner üzerine kur
+        ana = QVBoxLayout(self.container)
+        ana.setContentsMargins(10, 10, 10, 10)
+        ana.setSpacing(8)
 
         # ── Başlık ───────────────────────────────────────────────────────
         self._build_baslik(ana)
