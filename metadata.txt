@@ -1,0 +1,17 @@
+[general]
+name=TKGM Parsel Sorgulama
+qgisMinimumVersion=3.16
+description=TKGM CBS API üzerinden parsel sorgulama, geometri görüntüleme ve harita tıklama ile parsel bulma.
+version=0.0.1
+author=TKGM Parsel Plugin
+email=info@example.com
+about=Bu eklenti TKGM (Tapu ve Kadastro Genel Müdürlüğü) CBS API'sini kullanarak parsel sorgulama yapar. İl/İlçe/Mahalle/Ada/Parsel ile ya da haritaya tıklayarak parsel geometrisini QGIS katmanına ekler.
+tracker=https://github.com/example/tkgm-parsel-plugin
+repository=https://github.com/example/tkgm-parsel-plugin
+tags=tkgm,kadastro,parsel,tapu,turkey,türkiye
+homepage=https://github.com/example/tkgm-parsel-plugin
+category=Web
+icon=icon.png
+experimental=False
+deprecated=False
+server=False
