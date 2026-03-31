@@ -4,14 +4,23 @@ QGIS'e menu ve toolbar entegrasyonu sağlar.
 """
 
 import os
+import json
 try:
     from qgis.PyQt.QtGui import QAction
 except ImportError:
     from qgis.PyQt.QtWidgets import QAction
 
-from qgis.PyQt.QtWidgets import QToolBar
+from qgis.PyQt.QtWidgets import (
+    QDialog,
+    QVBoxLayout,
+    QLabel,
+    QTextEdit,
+    QCheckBox,
+    QDialogButtonBox,
+    QMessageBox,
+)
 from qgis.PyQt.QtGui import QIcon
-from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtCore import Qt, QSettings
 
 def _get_qt_flag(scope, name):
     if hasattr(Qt, scope):
@@ -22,10 +31,86 @@ def _get_qt_flag(scope, name):
         return getattr(Qt, name)
     return 0
 
+
+def _get_dialog_code(name):
+    if hasattr(QDialog, "DialogCode") and hasattr(QDialog.DialogCode, name):
+        return getattr(QDialog.DialogCode, name)
+    if hasattr(QDialog, name):
+        return getattr(QDialog, name)
+    return 0
+
+
+def _get_buttonbox_standard(name):
+    if hasattr(QDialogButtonBox, "StandardButton") and hasattr(QDialogButtonBox.StandardButton, name):
+        return getattr(QDialogButtonBox.StandardButton, name)
+    if hasattr(QDialogButtonBox, name):
+        return getattr(QDialogButtonBox, name)
+    return 0
+
 LeftDockWidgetArea = _get_qt_flag("DockWidgetArea", "LeftDockWidgetArea")
 RightDockWidgetArea = _get_qt_flag("DockWidgetArea", "RightDockWidgetArea")
+DialogAccepted = _get_dialog_code("Accepted")
+BtnOk = _get_buttonbox_standard("Ok")
+BtnCancel = _get_buttonbox_standard("Cancel")
 
 from .tkgm_panel import TKGMPanel
+
+
+KULLANIM_KOSULLARI_METNI = (
+    "Tapu ve Kadastro Genel Müdürlüğü (TKGM) Parsel Sorgulama Uygulamasını ziyaret eden her kullanıcı "
+    "aşağıda belirtilen kullanım koşullarını kabul etmiş sayılır. Lütfen sitemizi kullanmadan önce "
+    "kullanım koşullarını dikkatlice okuyunuz.\n\n"
+    "KULLANIM KOŞULLARI:\n\n"
+    "1- Bu site, hizmet sunmak için çerezleri kullanır. Bu siteyi kullanarak çerezlerin kullanılmasını kabul etmiş olursunuz. "
+    "Bu çerezler; dil seçimi gibi kullanıcı tercihlerine göre, sitenin çalışma veya görüntülenme biçimini değiştiren bilgileri hatırlamasını sağlar.\n"
+    "2- Parsel Sorgulama Uygulamasının çalışması için ihtiyaç duyulan web servislerine TKGM'den izin almaksızın doğrudan ve/veya dolaylı yöntemler ile erişimde bulunulamaz.\n"
+    "3- Sorgulama sonucu sunulan bilgi ve belgeler bilgilendirme amaçlıdır. Resmi işlemlerde kullanılamaz. Ayrıca ticari amaçla kullanılması yasaktır. "
+    "Amacı dışında kullanılması halinde her türlü hukuki, cezai ve mali sorumluluk uygunsuz kullanan kişilere aittir.\n"
+    "4- Kullanıcılar hiçbir şekilde sitede yer alan bilgilerin hatalı olması nedeniyle zarara uğradığı iddiasında bulunamaz.\n"
+    "5- TKGM sitenin içeriğini veya kullanıcılara sağlanan herhangi bir hizmeti, dilediği zaman değiştirme ya da sona erdirme hakkını saklı tutar.\n"
+    "6- TKGM sitenin 24 saat erişilebilir olması için çalışmaktadır. Ancak değişik sebeplerle sitenin erişilebilir olmamasından sorumlu değildir. "
+    "Bu siteye erişim, herhangi bir duyuru yapılmaksızın geçici olarak durdurulabilir.\n"
+    "7- İnternetin yapısı gereği bilgiler yeterli güvenlik önlemleri olmaksızın dolaşabilir, çoğaltılabilir ve yetkili olmayan kişiler tarafından alınıp kullanılabilir. "
+    "Bu kullanım ve kullanımdan doğacak zarar, TKGM'nin sorumluluğunda değildir.\n"
+    "8- Kullanıcılar ile TKGM arasında ortaya çıkabilecek ihtilaflarda, TKGM'nin kayıtları delil olarak kabul edilecektir.\n"
+    "9- TKGM kullanım koşullarının herhangi bir maddesini bildirimde bulunmaksızın değiştirme, yenileme veya iptal hakkına sahiptir. "
+    "Değiştirilen ya da yürürlükten kaldırılan her hüküm, yayım tarihinde tüm kullanıcılar bakımından hüküm ifade edecektir.\n"
+    "10- İhtilafların çözümünde Türkiye Cumhuriyeti kanunları uygulanır ve Ankara mahkemelerinin yetkili olduğu kabul edilir.\n"
+    "11- Parsel Sorgulama Uygulamasının tüm hakları saklıdır."
+)
+
+
+class KullanimKosullariDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("TKGM Parsel - Kullanım Koşulları")
+        self.resize(700, 520)
+
+        lay = QVBoxLayout(self)
+
+        baslik = QLabel("Lütfen eklentiyi kullanmadan önce kullanım koşullarını onaylayınız.")
+        baslik.setWordWrap(True)
+        lay.addWidget(baslik)
+
+        metin = QTextEdit()
+        metin.setReadOnly(True)
+        metin.setPlainText(KULLANIM_KOSULLARI_METNI)
+        lay.addWidget(metin)
+
+        self.chk_kabul = QCheckBox("Okudum ve kabul ediyorum")
+        lay.addWidget(self.chk_kabul)
+
+        self.btn_box = QDialogButtonBox(BtnOk | BtnCancel)
+        self.btn_box.button(BtnOk).setText("Kabul Ediyorum")
+        self.btn_box.button(BtnCancel).setText("Kabul Etmiyorum")
+        self.btn_box.button(BtnOk).setEnabled(False)
+        lay.addWidget(self.btn_box)
+
+        self.chk_kabul.toggled.connect(
+            lambda v: self.btn_box.button(BtnOk).setEnabled(v)
+        )
+        self.btn_box.accepted.connect(self.accept)
+        self.btn_box.rejected.connect(self.reject)
 
 
 class TKGMParselPlugin:
@@ -33,6 +118,78 @@ class TKGMParselPlugin:
         self.iface = iface
         self.panel = None
         self.action = None
+        self.plugin_version = self._plugin_surumu_oku()
+
+    def _plugin_surumu_oku(self) -> str:
+        metadata = os.path.join(os.path.dirname(__file__), "metadata.txt")
+        try:
+            with open(metadata, "r", encoding="utf-8") as f:
+                for line in f:
+                    s = line.strip()
+                    if s.lower().startswith("version="):
+                        return s.split("=", 1)[1].strip()
+        except Exception:
+            pass
+        return "0.0.0"
+
+    def _onay_dosya_yolu(self) -> str:
+        return os.path.join(os.path.dirname(__file__), ".kullanim_kosullari_onay.json")
+
+    def _onay_surum_dosyadan_oku(self) -> str:
+        path = self._onay_dosya_yolu()
+        if not os.path.exists(path):
+            return ""
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return str(data.get("accepted_version") or "")
+        except Exception:
+            return ""
+
+    def _onay_surum_dosyaya_yaz(self, version: str) -> None:
+        path = self._onay_dosya_yolu()
+        data = {"accepted_version": str(version)}
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+    def _kullanim_kosulu_onayli_mi(self) -> bool:
+        # Öncelik: eklenti klasöründeki onay dosyası (yeniden kurulumda sıfırlanır)
+        onay_surum = self._onay_surum_dosyadan_oku()
+        if onay_surum:
+            return onay_surum == self.plugin_version
+
+        # Geriye dönük uyumluluk için eski QSettings anahtarı
+        settings = QSettings()
+        key = "TKGMParsel/kullanimKosullariOnaySurum"
+        onay_surum = settings.value(key, "", type=str)
+        return onay_surum == self.plugin_version
+
+    def _kullanim_kosulu_onaylat(self) -> bool:
+        if self._kullanim_kosulu_onayli_mi():
+            return True
+
+        dlg = KullanimKosullariDialog(self.iface.mainWindow())
+        if hasattr(dlg, "exec"):
+            sonuc = dlg.exec()
+        else:
+            sonuc = dlg.exec_()
+
+        if sonuc != DialogAccepted:
+            QMessageBox.information(
+                self.iface.mainWindow(),
+                "TKGM Parsel",
+                "Eklentiyi kullanabilmek için kullanım koşullarını kabul etmeniz gerekir.",
+            )
+            return False
+
+        settings = QSettings()
+        settings.setValue("TKGMParsel/kullanimKosullariOnaySurum", self.plugin_version)
+        try:
+            self._onay_surum_dosyaya_yaz(self.plugin_version)
+        except Exception:
+            # Dosyaya yazılamazsa QSettings fallback devam eder.
+            pass
+        return True
 
     def initGui(self):
         """QGIS arayüzüne eklenti öğelerini ekler."""
@@ -66,6 +223,11 @@ class TKGMParselPlugin:
     def _panel_toggle(self, checked: bool):
         """Paneli aç/kapat."""
         if checked:
+            if not self._kullanim_kosulu_onaylat():
+                if self.action:
+                    self.action.setChecked(False)
+                return
+
             if self.panel is None:
                 self.panel = TKGMPanel(self.iface)
                 self.panel.setAllowedAreas(

@@ -4,16 +4,42 @@ Arayüz tasarımı ui_tkgm_panel.py modülündedir.
 Bu dosya yalnızca sinyal-slot bağlantılarını ve iş mantığını içerir.
 """
 
-from qgis.PyQt.QtWidgets import QDockWidget, QMessageBox
+from qgis.PyQt.QtWidgets import (
+    QDockWidget, QMessageBox, QWidget, QVBoxLayout, QHBoxLayout,
+    QToolButton, QLabel, QFrame, QTableWidget, QTableWidgetItem,
+    QAbstractItemView, QHeaderView,
+)
 from qgis.PyQt.QtCore import Qt
 
 from .ui_tkgm_panel import Ui_TKGMPanel
 from .workers import (
     IlWorker, IlceWorker, MahalleWorker,
-    ParselWorker, ParselKoordinatWorker,
+    ParselWorker, ParselKoordinatWorker, ParselBlokVeBBWorker,
 )
-from .layer_manager import parsel_katmana_ekle, parsele_zoom_yap
+from .layer_manager import parsel_katmana_ekle, bagimsiz_bolumleri_katmana_ekle, parsele_zoom_yap
 from .map_tool import ParselTiklamaAraci
+
+
+def _get_class_enum(cls, scope, name):
+    if hasattr(cls, scope):
+        enum_scope = getattr(cls, scope)
+        if hasattr(enum_scope, name):
+            return getattr(enum_scope, name)
+    if hasattr(cls, name):
+        return getattr(cls, name)
+    return 0
+
+
+ToolButtonTextBesideIcon = _get_class_enum(Qt, "ToolButtonStyle", "ToolButtonTextBesideIcon")
+RightArrow = _get_class_enum(Qt, "ArrowType", "RightArrow")
+DownArrow = _get_class_enum(Qt, "ArrowType", "DownArrow")
+
+NoEditTriggers = _get_class_enum(QAbstractItemView, "EditTrigger", "NoEditTriggers")
+SelectRows = _get_class_enum(QAbstractItemView, "SelectionBehavior", "SelectRows")
+SingleSelection = _get_class_enum(QAbstractItemView, "SelectionMode", "SingleSelection")
+
+ResizeToContents = _get_class_enum(QHeaderView, "ResizeMode", "ResizeToContents")
+Stretch = _get_class_enum(QHeaderView, "ResizeMode", "Stretch")
 
 
 # ─── Türkçe alfabetik sıralama yardımcısı ────────────────────────────────────
@@ -57,6 +83,7 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
 
         # Son parsel verisi
         self._son_parsel = None
+        self._son_bina_bb_sorgu = None
 
         # Arayüzü inşa et (Ui_TKGMPanel'den)
         self.setup_ui(self)
@@ -73,6 +100,7 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
         self.cmb_il.currentIndexChanged.connect(self._on_il_degisti)
         self.cmb_ilce.currentIndexChanged.connect(self._on_ilce_degisti)
         self.btn_sorgula.clicked.connect(self._on_sorgula)
+        self.btn_bina_bb.clicked.connect(self._on_bina_bb_sorgula)
         self.btn_tikla_ac.toggled.connect(self._on_tikla_toggle)
         self.btn_zoom.clicked.connect(self._on_zoom)
 
@@ -81,7 +109,7 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
         self._durum("İller yükleniyor...")
         w = IlWorker()
         w.finished.connect(self._on_iller_yuklendi)
-        w.error.connect(lambda e: self._hata(f"İl listesi hatası: {e}"))
+        w.error.connect(lambda e: self._hata(self._kullanici_hata_mesaji(e, "İl listesi alınamadı")))
         self._workers.append(w)
         w.start()
 
@@ -108,7 +136,7 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
         self.cmb_ilce.addItem("Yükleniyor...", None)
         w = IlceWorker(il_kodu)
         w.finished.connect(self._on_ilceler_yuklendi)
-        w.error.connect(lambda e: self._hata(f"İlçe hatası: {e}"))
+        w.error.connect(lambda e: self._hata(self._kullanici_hata_mesaji(e, "İlçe listesi alınamadı")))
         self._workers.append(w)
         w.start()
 
@@ -132,7 +160,7 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
         self.cmb_mahalle.addItem("Yükleniyor...", None)
         w = MahalleWorker(ilce_kodu)
         w.finished.connect(self._on_mahalleler_yuklendi)
-        w.error.connect(lambda e: self._hata(f"Mahalle hatası: {e}"))
+        w.error.connect(lambda e: self._hata(self._kullanici_hata_mesaji(e, "Mahalle listesi alınamadı")))
         self._workers.append(w)
         w.start()
 
@@ -177,6 +205,9 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
     def _on_parsel_geldi(self, parsel: dict):
         self.btn_sorgula.setEnabled(True)
         self._son_parsel = parsel
+        self._clear_bina_bb_alani()
+        self.grp_bina_bb.setVisible(False)
+        self.lbl_bina_bb_ozet.setText("")
 
         # Sonuç panelini doldur
         alan = parsel.get("alan") or 0
@@ -195,8 +226,11 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
 
         # Katmana ekle
         try:
-            parsel_katmana_ekle(parsel)
-            self.lbl_katman.setText("✅ Katmana eklendi: 'TKGM Parseller'")
+            eklendi = parsel_katmana_ekle(parsel)
+            if eklendi:
+                self.lbl_katman.setText("✅ Katmana eklendi: 'TKGM Parseller'")
+            else:
+                self.lbl_katman.setText("ℹ Parsel zaten katmanda: 'TKGM Parseller'")
             parsele_zoom_yap(self.canvas, parsel)
         except Exception as e:
             self.lbl_katman.setText(f"⚠ Katman hatası: {e}")
@@ -207,7 +241,162 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
 
     def _on_parsel_hatasi(self, hata: str):
         self.btn_sorgula.setEnabled(True)
-        self._hata(f"Parsel bulunamadı: {hata}")
+        self._hata(self._kullanici_hata_mesaji(hata, "Parsel bulunamadı"))
+
+    def _on_bina_bb_sorgula(self):
+        mahalle_kodu = self.cmb_mahalle.currentData()
+        ada_no = self.txt_ada.text().strip()
+        parsel_no = self.txt_parsel.text().strip()
+
+        # Son başarılı sorgu varsa otomatik kullan (haritadan tıklama için de geçerli)
+        if self._son_parsel:
+            mahalle_kodu = self._son_parsel.get("mahalleKodu") or mahalle_kodu
+            ada_no = str(self._son_parsel.get("adaNo") or ada_no)
+            parsel_no = str(self._son_parsel.get("parselNo") or parsel_no)
+
+        if not mahalle_kodu or not ada_no or not parsel_no:
+            self._hata("Bina/BB listesi için önce parsel seçin veya mahalle/ada/parsel girin")
+            return
+
+        try:
+            ada_no_int = int(ada_no)
+            parsel_no_int = int(parsel_no)
+        except ValueError:
+            self._hata("Ada ve Parsel sadece sayısal olmalıdır")
+            return
+
+        self._son_bina_bb_sorgu = {
+            "mahalleKodu": str(mahalle_kodu),
+            "adaNo": ada_no_int,
+            "parselNo": parsel_no_int,
+        }
+
+        self._durum("Bina/BB listesi sorgulanıyor...")
+        self.btn_bina_bb.setEnabled(False)
+        self._clear_bina_bb_alani()
+
+        w = ParselBlokVeBBWorker(mahalle_kodu, ada_no, parsel_no)
+        w.finished.connect(self._on_bina_bb_listesi_geldi)
+        w.error.connect(self._on_bina_bb_hatasi)
+        self._workers.append(w)
+        w.start()
+
+    def _on_bina_bb_listesi_geldi(self, bloklar: list):
+        self.btn_bina_bb.setEnabled(True)
+
+        if not bloklar:
+            self.grp_bina_bb.setVisible(True)
+            self.lbl_bina_bb_ozet.setText("Bu parsel için bina/blok kaydı bulunamadı.")
+            self._durum("Bina/BB listesi boş")
+            return
+
+        self.grp_bina_bb.setVisible(True)
+        toplam_bb = 0
+        for blok in bloklar:
+            toplam_bb += len(blok.get("bagimsizBolumler") or [])
+            self._akordiyon_blok_ekle(blok)
+
+        self.lbl_bina_bb_ozet.setText(
+            f"Toplam {len(bloklar)} blok bulundu. Toplam {toplam_bb} bağımsız bölüm listelendi."
+        )
+
+        if self._son_parsel:
+            parsel_ref = self._son_parsel
+        else:
+            parsel_ref = self._son_bina_bb_sorgu or {}
+
+        try:
+            eklenen_bb, atlanan_bb = bagimsiz_bolumleri_katmana_ekle(parsel_ref, bloklar)
+            self.lbl_bina_bb_ozet.setText(
+                f"Toplam {len(bloklar)} blok bulundu. Toplam {toplam_bb} bağımsız bölüm listelendi. "
+                f"Tabloya eklenen: {eklenen_bb}, mükerrer atlanan: {atlanan_bb}."
+            )
+        except Exception as e:
+            self._hata(f"Bağımsız bölüm kayıt hatası: {e}")
+
+        self._durum(f"Bina/BB listesi alındı ({len(bloklar)} kayıt)")
+
+    def _on_bina_bb_hatasi(self, hata: str):
+        self.btn_bina_bb.setEnabled(True)
+        self._hata(self._kullanici_hata_mesaji(hata, "Bina/BB sorgusu başarısız"))
+
+    def _clear_bina_bb_alani(self):
+        if not hasattr(self, "bina_bb_layout"):
+            return
+        while self.bina_bb_layout.count() > 1:
+            item = self.bina_bb_layout.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
+
+    def _akordiyon_blok_ekle(self, blok: dict):
+        blok_no = str(blok.get("blok") or "-")
+        tip = blok.get("zeminKmdurum") or "-"
+        bb_sayi = blok.get("bagimsizBolumSayisi") or 0
+        bb_listesi = blok.get("bagimsizBolumler") or []
+
+        kart = QWidget()
+        kart_lay = QVBoxLayout(kart)
+        kart_lay.setContentsMargins(0, 0, 0, 0)
+        kart_lay.setSpacing(4)
+
+        ust = QFrame()
+        ust.setStyleSheet("QFrame { background:#eef3f8; border:1px solid #d0dbe7; border-radius:4px; }")
+        ust_lay = QHBoxLayout(ust)
+        ust_lay.setContentsMargins(8, 4, 8, 4)
+
+        btn = QToolButton()
+        btn.setToolButtonStyle(ToolButtonTextBesideIcon)
+        btn.setArrowType(RightArrow)
+        btn.setCheckable(True)
+        btn.setChecked(False)
+        btn.setText(f"Blok {blok_no} | Bina Nitelik: {tip} | Bağımsız Bölüm: {bb_sayi}")
+        btn.setStyleSheet("QToolButton { font-weight: 600; color:#243b53; border:none; text-align:left; }")
+        ust_lay.addWidget(btn)
+        kart_lay.addWidget(ust)
+
+        icerik = QWidget()
+        icerik_lay = QVBoxLayout(icerik)
+        icerik_lay.setContentsMargins(0, 0, 0, 0)
+        icerik_lay.setSpacing(0)
+
+        tablo = QTableWidget()
+        tablo.setColumnCount(4)
+        tablo.setHorizontalHeaderLabels(["Kat", "Giriş", "Nitelik", "BB No"])
+        tablo.setEditTriggers(NoEditTriggers)
+        tablo.setSelectionBehavior(SelectRows)
+        tablo.setSelectionMode(SingleSelection)
+        tablo.setAlternatingRowColors(True)
+        tablo.verticalHeader().setVisible(False)
+        tablo.verticalHeader().setDefaultSectionSize(28)
+        tablo.horizontalHeader().setSectionResizeMode(0, ResizeToContents)
+        tablo.horizontalHeader().setSectionResizeMode(1, ResizeToContents)
+        tablo.horizontalHeader().setSectionResizeMode(2, Stretch)
+        tablo.horizontalHeader().setSectionResizeMode(3, ResizeToContents)
+
+        tablo.setRowCount(len(bb_listesi))
+        for row, item in enumerate(bb_listesi):
+            tablo.setItem(row, 0, QTableWidgetItem(item.get("kat") or "-"))
+            tablo.setItem(row, 1, QTableWidgetItem(item.get("giris") or "-"))
+            tablo.setItem(row, 2, QTableWidgetItem(item.get("nitelik") or "-"))
+            tablo.setItem(row, 3, QTableWidgetItem(item.get("no") or "-"))
+
+        gorunen_satir = max(8, min(len(bb_listesi), 12))
+        if len(bb_listesi) == 0:
+            gorunen_satir = 1
+        baslik_h = tablo.horizontalHeader().height() + 4
+        tablo.setMinimumHeight(baslik_h + (gorunen_satir * tablo.verticalHeader().defaultSectionSize()))
+
+        icerik_lay.addWidget(tablo)
+        icerik.setVisible(False)
+        kart_lay.addWidget(icerik)
+
+        def _toggle(aktif):
+            icerik.setVisible(aktif)
+            btn.setArrowType(DownArrow if aktif else RightArrow)
+
+        btn.toggled.connect(_toggle)
+        self.bina_bb_layout.insertWidget(self.bina_bb_layout.count() - 1, kart)
 
     # ──────────────────────────────────── Harita Tıklama Aracı ────────────────
     def _on_tikla_toggle(self, aktif: bool):
@@ -240,6 +429,22 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
     # ──────────────────────────────────── Yardımcı ────────────────────────────
     def _durum(self, mesaj: str):
         self.lbl_durum.setText(mesaj)
+
+    def _kullanici_hata_mesaji(self, hata: str, varsayilan: str) -> str:
+        temiz_hata = (hata or "").strip()
+        hata_lower = temiz_hata.lower()
+
+        if "günlük sorgu limitini aştınız" in hata_lower or "gunluk sorgu limitini astiniz" in hata_lower:
+            return "Günlük sorgu limitini aştınız."
+
+        # TKGM limit dolumu bazı uçlarda sadece HTTP 403 dönebiliyor.
+        if "http 403" in hata_lower:
+            return "Günlük sorgu limitini aştınız."
+
+        if "http " in hata_lower or "http error" in hata_lower:
+            return varsayilan
+
+        return temiz_hata or varsayilan
 
     def _hata(self, mesaj: str):
         self.lbl_durum.setText(f"⚠ {mesaj}")

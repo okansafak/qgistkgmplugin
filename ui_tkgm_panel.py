@@ -25,8 +25,18 @@ def _get_qt_flag(scope, name, fallback_scope=None):
         return getattr(Qt, name)
     return 0
 
+
+def _get_qframe_shape(name):
+    if hasattr(QFrame, "Shape") and hasattr(QFrame.Shape, name):
+        return getattr(QFrame.Shape, name)
+    if hasattr(QFrame, name):
+        return getattr(QFrame, name)
+    return 0
+
 AlignCenter = _get_qt_flag("AlignmentFlag", "AlignCenter", "Alignment")
 TextSelectableByMouse = _get_qt_flag("TextInteractionFlag", "TextSelectableByMouse", "TextInteraction")
+FrameNoFrame = _get_qframe_shape("NoFrame")
+FrameHLine = _get_qframe_shape("HLine")
 
 
 # ─── Stil Sabitleri ──────────────────────────────────────────────────────────
@@ -36,6 +46,11 @@ STIL_BASLIK = (
 STIL_BTN_SORGULA = (
     "QPushButton { background:#2c7a4b; color:white; border-radius:5px; font-weight:bold; }"
     "QPushButton:hover { background:#236040; }"
+    "QPushButton:disabled { background:#aaa; }"
+)
+STIL_BTN_BINA_BB = (
+    "QPushButton { background:#0b7285; color:white; border-radius:5px; font-weight:bold; }"
+    "QPushButton:hover { background:#0a5f6f; }"
     "QPushButton:disabled { background:#aaa; }"
 )
 STIL_BTN_TIKLA = (
@@ -55,6 +70,7 @@ STIL_ACIKLAMA = "color: #555; font-size: 11px;"
 STIL_SONUC_KEY = "font-weight: bold; color: #444;"
 STIL_KATMAN = "color: #2c7a4b; font-size: 11px;"
 STIL_DURUM = "color: #555; font-size: 11px; padding: 3px 0;"
+STIL_AKORDIYON_CONTAINER = "QWidget { background: #f7f9fa; border: 1px solid #d9e2ec; border-radius: 6px; }"
 
 # Sonuç panelinde gösterilecek satırlar
 SONUC_SATIRLARI = [
@@ -81,7 +97,7 @@ class Ui_TKGMPanel:
         # Ana Kaydırma Alanı (Scroll Area) oluştur
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setFrameShape(QFrame.NoFrame)
+        self.scroll_area.setFrameShape(FrameNoFrame)
         # Stil temizlendi - alt bileşenlerin (Combo Box) görünmesini bozan şey buydu
         
         # İçerik Widget'ı
@@ -114,7 +130,7 @@ class Ui_TKGMPanel:
 
         # ── Ayraç ────────────────────────────────────────────────────────
         cizgi = QFrame()
-        cizgi.setFrameShape(QFrame.HLine)
+        cizgi.setFrameShape(FrameHLine)
         cizgi.setStyleSheet("color: #ccc;")
         ana.addWidget(cizgi)
 
@@ -123,6 +139,9 @@ class Ui_TKGMPanel:
 
         # ── Sonuç Alanı ─────────────────────────────────────────────────
         self._build_sonuc(ana)
+
+        # ── Bina/BB Sonuç Alanı ────────────────────────────────────────
+        self._build_bina_bb_sonuc(ana)
 
         ana.addStretch()
 
@@ -232,16 +251,50 @@ class Ui_TKGMPanel:
             gs.addWidget(lbl_val, idx, 1)
             self._sonuc_etiketler[key] = lbl_val
 
+        self.btn_bina_bb = QPushButton("🏢  Bina/BB Listesi Sorgula")
+        self.btn_bina_bb.setMinimumHeight(34)
+        self.btn_bina_bb.setStyleSheet(STIL_BTN_BINA_BB)
+        gs.addWidget(self.btn_bina_bb, len(SONUC_SATIRLARI), 0, 1, 2)
+
         # Zoom butonu
         self.btn_zoom = QPushButton("🔭  Parsele Git")
         self.btn_zoom.setMinimumHeight(30)
         self.btn_zoom.setStyleSheet(STIL_BTN_ZOOM)
-        gs.addWidget(self.btn_zoom, len(SONUC_SATIRLARI), 0, 1, 2)
+        gs.addWidget(self.btn_zoom, len(SONUC_SATIRLARI) + 1, 0, 1, 2)
 
         # Katman bilgisi
         self.lbl_katman = QLabel()
         self.lbl_katman.setStyleSheet(STIL_KATMAN)
         self.lbl_katman.setAlignment(AlignCenter)
-        gs.addWidget(self.lbl_katman, len(SONUC_SATIRLARI) + 1, 0, 1, 2)
+        gs.addWidget(self.lbl_katman, len(SONUC_SATIRLARI) + 2, 0, 1, 2)
 
         layout.addWidget(self.grp_sonuc)
+
+    def _build_bina_bb_sonuc(self, layout):
+        self.grp_bina_bb = QGroupBox("Bina/BB Listesi")
+        self.grp_bina_bb.setVisible(False)
+        self.grp_bina_bb.setMinimumHeight(360)
+        vb = QVBoxLayout(self.grp_bina_bb)
+        vb.setSpacing(6)
+
+        self.lbl_bina_bb_ozet = QLabel("")
+        self.lbl_bina_bb_ozet.setStyleSheet(STIL_ACIKLAMA)
+        self.lbl_bina_bb_ozet.setWordWrap(True)
+        vb.addWidget(self.lbl_bina_bb_ozet)
+
+        self.bina_bb_scroll = QScrollArea()
+        self.bina_bb_scroll.setWidgetResizable(True)
+        self.bina_bb_scroll.setFrameShape(FrameNoFrame)
+        self.bina_bb_scroll.setMinimumHeight(310)
+
+        self.bina_bb_container = QWidget()
+        self.bina_bb_container.setStyleSheet(STIL_AKORDIYON_CONTAINER)
+        self.bina_bb_layout = QVBoxLayout(self.bina_bb_container)
+        self.bina_bb_layout.setContentsMargins(8, 8, 8, 8)
+        self.bina_bb_layout.setSpacing(6)
+        self.bina_bb_layout.addStretch()
+
+        self.bina_bb_scroll.setWidget(self.bina_bb_container)
+        vb.addWidget(self.bina_bb_scroll)
+
+        layout.addWidget(self.grp_bina_bb)

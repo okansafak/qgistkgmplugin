@@ -82,3 +82,39 @@ class ParselKoordinatWorker(QThread):
             self.finished.emit(get_parsel_koordinat(self.lat, self.lng))
         except Exception as e:
             self.error.emit(str(e))
+
+
+class ParselBlokListesiWorker(QThread):
+    finished = pyqtSignal(list)
+    error = pyqtSignal(str)
+
+    def __init__(self, mahalle_kodu, ada_no, parsel_no):
+        super().__init__()
+        self.mahalle_kodu = mahalle_kodu
+        self.ada_no = ada_no
+        self.parsel_no = parsel_no
+
+    def run(self):
+        try:
+            from .tkgm_api import get_parsel_blok_listesi
+            self.finished.emit(get_parsel_blok_listesi(self.mahalle_kodu, self.ada_no, self.parsel_no))
+        except Exception as e:
+            self.error.emit(str(e))
+
+
+class ParselBlokVeBBWorker(QThread):
+    finished = pyqtSignal(list)
+    error = pyqtSignal(str)
+
+    def __init__(self, mahalle_kodu, ada_no, parsel_no):
+        super().__init__()
+        self.mahalle_kodu = mahalle_kodu
+        self.ada_no = ada_no
+        self.parsel_no = parsel_no
+
+    def run(self):
+        try:
+            from .tkgm_api import get_parsel_blok_ve_bb_listesi
+            self.finished.emit(get_parsel_blok_ve_bb_listesi(self.mahalle_kodu, self.ada_no, self.parsel_no))
+        except Exception as e:
+            self.error.emit(str(e))

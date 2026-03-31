@@ -4,6 +4,9 @@ Tüm HTTP isteklerini yönetir.
 """
 
 import json
+import html
+import re
+import urllib.parse
 import urllib.request
 import urllib.error
 from typing import Optional
@@ -21,11 +24,52 @@ HEADERS = {
 TIMEOUT = 30
 
 
+def _extract_message_from_raw(raw: str) -> Optional[str]:
+    metin = (raw or "").strip()
+    if not metin:
+        return None
+
+    # XML string payload: <string>Mesaj</string>
+    if metin.startswith("<"):
+        m = re.search(r"<string[^>]*>(.*?)</string>", metin, flags=re.IGNORECASE | re.DOTALL)
+        if m:
+            return html.unescape(m.group(1).strip())
+
+    # JSON payload içinde Message benzeri alanlar
+    try:
+        data = json.loads(metin)
+        if isinstance(data, dict):
+            for key in ("Message", "message", "error", "detail"):
+                if data.get(key):
+                    return str(data.get(key)).strip()
+    except Exception:
+        pass
+
+    return None
+
+
 def _get(url: str) -> dict:
     """Verilen URL'ye GET isteği atar, JSON döner."""
     req = urllib.request.Request(url, headers=HEADERS)
-    with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
-        raw = resp.read().decode("utf-8")
+    try:
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+            raw = resp.read().decode("utf-8")
+    except urllib.error.HTTPError as e:
+        raw_err = ""
+        try:
+            raw_err = e.read().decode("utf-8", errors="replace")
+        except Exception:
+            raw_err = ""
+
+        mesaj = _extract_message_from_raw(raw_err)
+        if mesaj:
+            raise ValueError(mesaj)
+        raise ValueError(f"HTTP {e.code}")
+
+    mesaj = _extract_message_from_raw(raw)
+    if mesaj:
+        raise ValueError(mesaj)
+
     return json.loads(raw)
 
 
@@ -162,3 +206,75 @@ def get_parsel_koordinat(lat: float, lng: float) -> dict:
     url = f"{TKGM_API_BASE}/parsel/{lat}/{lng}/"
     data = _get(url)
     return _parse_parsel_feature(data)
+
+
+def get_parsel_blok_listesi(mahalle_kodu, ada_no, parsel_no) -> list:
+    """Parsel üzerindeki bina/blok (BB) listesini döner."""
+    url = f"{TKGM_API_BASE}/parsel/blok/{mahalle_kodu}/{ada_no}/{parsel_no}"
+    data = _get(url)
+
+    if data.get("Message"):
+        raise ValueError(data["Message"])
+
+    if data.get("type") != "FeatureCollection":
+        raise ValueError("Beklenmeyen API yanıtı")
+
+    result = []
+    for feature in data.get("features") or []:
+        props = feature.get("properties") or {}
+        result.append({
+            "blok": props.get("blok") or "",
+            "bagimsizBolumSayisi": props.get("bagimsizBolumSayisi") or 0,
+            "zeminKmdurum": props.get("zeminKmdurum") or "",
+            "atZeminId": props.get("atZeminId"),
+            "mahalleId": props.get("mahalleId") or mahalle_kodu,
+            "adaNo": str(props.get("adaNo") or ada_no),
+            "parselNo": str(props.get("parselNo") or parsel_no),
+        })
+
+    return result
+
+
+def get_parsel_bagimsiz_bolum_listesi(mahalle_kodu, ada_no, parsel_no, blok_no) -> list:
+    """Parseldeki blok için bağımsız bölüm (kat mülkiyeti) listesini döner."""
+    blok_enc = urllib.parse.quote(str(blok_no), safe="")
+    url = f"{TKGM_API_BASE}/parsel/bagimsizbolum/{mahalle_kodu}/{ada_no}/{parsel_no}/{blok_enc}"
+    data = _get(url)
+
+    if data.get("Message"):
+        raise ValueError(data["Message"])
+
+    if data.get("type") != "FeatureCollection":
+        raise ValueError("Beklenmeyen API yanıtı")
+
+    result = []
+    for feature in data.get("features") or []:
+        props = feature.get("properties") or {}
+        result.append({
+            "tip": props.get("tip") or "",
+            "kat": props.get("kat") or "",
+            "giris": props.get("giris") or "",
+            "nitelik": props.get("nitelik") or "",
+            "no": str(props.get("no") or ""),
+            "blok": str(props.get("blok") or blok_no),
+            "durum": str(props.get("durum") or ""),
+        })
+
+    return result
+
+
+def get_parsel_blok_ve_bb_listesi(mahalle_kodu, ada_no, parsel_no) -> list:
+    """Parseldeki tüm blokları ve her blok için bağımsız bölüm listesini döner."""
+    bloklar = get_parsel_blok_listesi(mahalle_kodu, ada_no, parsel_no)
+    for blok in bloklar:
+        blok_no = blok.get("blok")
+        try:
+            blok["bagimsizBolumler"] = get_parsel_bagimsiz_bolum_listesi(
+                mahalle_kodu,
+                ada_no,
+                parsel_no,
+                blok_no,
+            )
+        except Exception:
+            blok["bagimsizBolumler"] = []
+    return bloklar
