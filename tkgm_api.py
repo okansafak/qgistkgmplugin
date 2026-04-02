@@ -23,6 +23,7 @@ HEADERS = {
 
 TIMEOUT = 30
 ALLOWED_URL_SCHEMES = {"http", "https"}
+ALLOWED_URL_HOSTS = {"cbsapi.tkgm.gov.tr", "parselsorgu.tkgm.gov.tr"}
 
 
 def _extract_message_from_raw(raw: str) -> Optional[str]:
@@ -54,6 +55,9 @@ def _validate_url(url: str) -> None:
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme.lower() not in ALLOWED_URL_SCHEMES:
         raise ValueError(f"Geçersiz URL şeması: {parsed.scheme}")
+    host = (parsed.hostname or "").lower()
+    if host not in ALLOWED_URL_HOSTS:
+        raise ValueError(f"İzin verilmeyen URL hostu: {host}")
 
 
 def _get(url: str) -> dict:
@@ -61,7 +65,8 @@ def _get(url: str) -> dict:
     _validate_url(url)
     req = urllib.request.Request(url, headers=HEADERS)
     try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+        # URL, şema + host allowlist kontrolünden geçtiği için burada kontrollü açılır.
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:  # nosec B310
             raw = resp.read().decode("utf-8")
     except urllib.error.HTTPError as e:
         raw_err = ""
