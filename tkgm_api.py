@@ -22,6 +22,7 @@ HEADERS = {
 }
 
 TIMEOUT = 30
+ALLOWED_URL_SCHEMES = {"http", "https"}
 
 
 def _extract_message_from_raw(raw: str) -> Optional[str]:
@@ -48,8 +49,16 @@ def _extract_message_from_raw(raw: str) -> Optional[str]:
     return None
 
 
+def _validate_url(url: str) -> None:
+    """Yalnızca beklenen HTTP(S) URL şemalarına izin ver."""
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme.lower() not in ALLOWED_URL_SCHEMES:
+        raise ValueError(f"Geçersiz URL şeması: {parsed.scheme}")
+
+
 def _get(url: str) -> dict:
     """Verilen URL'ye GET isteği atar, JSON döner."""
+    _validate_url(url)
     req = urllib.request.Request(url, headers=HEADERS)
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:

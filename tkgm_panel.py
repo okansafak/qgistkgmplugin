@@ -214,8 +214,14 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
         self._sonuc_etiketler["il"].setText(parsel.get("ilAd") or "—")
         self._sonuc_etiketler["ilce"].setText(parsel.get("ilceAd") or "—")
         self._sonuc_etiketler["mahalle"].setText(parsel.get("mahalleAd") or "—")
-        self._sonuc_etiketler["ada"].setText(str(parsel.get("adaNo") or "—"))
-        self._sonuc_etiketler["parsel"].setText(str(parsel.get("parselNo") or "—"))
+        ada_no = parsel.get("adaNo")
+        parsel_no = parsel.get("parselNo")
+        self._sonuc_etiketler["ada"].setText(
+            "—" if ada_no is None or str(ada_no).strip() == "" else str(ada_no)
+        )
+        self._sonuc_etiketler["parsel"].setText(
+            "—" if parsel_no is None or str(parsel_no).strip() == "" else str(parsel_no)
+        )
         self._sonuc_etiketler["alan"].setText(
             f"{alan:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         )
@@ -250,9 +256,16 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
 
         # Son başarılı sorgu varsa otomatik kullan (haritadan tıklama için de geçerli)
         if self._son_parsel:
-            mahalle_kodu = self._son_parsel.get("mahalleKodu") or mahalle_kodu
-            ada_no = str(self._son_parsel.get("adaNo") or ada_no)
-            parsel_no = str(self._son_parsel.get("parselNo") or parsel_no)
+            son_mahalle_kodu = self._son_parsel.get("mahalleKodu")
+            son_ada_no = self._son_parsel.get("adaNo")
+            son_parsel_no = self._son_parsel.get("parselNo")
+
+            if son_mahalle_kodu is not None and str(son_mahalle_kodu).strip() != "":
+                mahalle_kodu = son_mahalle_kodu
+            if son_ada_no is not None and str(son_ada_no).strip() != "":
+                ada_no = str(son_ada_no).strip()
+            if son_parsel_no is not None and str(son_parsel_no).strip() != "":
+                parsel_no = str(son_parsel_no).strip()
 
         if not mahalle_kodu or not ada_no or not parsel_no:
             self._hata("Bina/BB listesi için önce parsel seçin veya mahalle/ada/parsel girin")
