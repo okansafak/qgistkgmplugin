@@ -70,6 +70,7 @@ STIL_ACIKLAMA = "color: #555; font-size: 11px;"
 STIL_SONUC_KEY = "font-weight: bold; color: #444;"
 STIL_KATMAN = "color: #2c7a4b; font-size: 11px;"
 STIL_DURUM = "color: #555; font-size: 11px; padding: 3px 0;"
+STIL_SORGU_SAYAC = "color: #2b4c7e; font-size: 11px; padding: 0 0 4px 0;"
 STIL_AKORDIYON_CONTAINER = "QWidget { background: #f7f9fa; border: 1px solid #d9e2ec; border-radius: 6px; }"
 
 # Sonuç panelinde gösterilecek satırlar
@@ -149,6 +150,10 @@ class Ui_TKGMPanel:
         self.lbl_durum = QLabel("Hazır")
         self.lbl_durum.setStyleSheet(STIL_DURUM)
         ana.addWidget(self.lbl_durum)
+
+        self.lbl_gunluk_sorgu = QLabel("Bugünkü sorgu: 0")
+        self.lbl_gunluk_sorgu.setStyleSheet(STIL_SORGU_SAYAC)
+        ana.addWidget(self.lbl_gunluk_sorgu)
 
     # ================================================================
     #  Arayüz bölüm inşaatçıları

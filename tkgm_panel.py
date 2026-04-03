@@ -87,6 +87,7 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
 
         # Arayüzü inşa et (Ui_TKGMPanel'den)
         self.setup_ui(self)
+        self._refresh_gunluk_sorgu_sayisi()
 
         # Sinyal-slot bağlantıları
         self._connect_signals()
@@ -120,6 +121,7 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
             self.cmb_il.addItem(il["ad"], il["id"])
         self.cmb_il.setEnabled(True)
         self.cmb_il.setPlaceholderText("")
+        self._refresh_gunluk_sorgu_sayisi()
         self._durum(f"{len(iller)} il yüklendi")
 
     def _on_il_degisti(self, idx):
@@ -146,6 +148,7 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
         for ilce in sorted(ilceler, key=lambda x: _tr_sort_key(x.get("ilceAdi", ""))):
             self.cmb_ilce.addItem(ilce["ilceAdi"], ilce["ilceKodu"])
         self.cmb_ilce.setEnabled(True)
+        self._refresh_gunluk_sorgu_sayisi()
         self._durum(f"{len(ilceler)} ilçe yüklendi")
 
     def _on_ilce_degisti(self, idx):
@@ -170,6 +173,7 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
         for mah in sorted(mahalleler, key=lambda x: _tr_sort_key(x.get("mahalleAdi", ""))):
             self.cmb_mahalle.addItem(mah["mahalleAdi"], mah["mahalleKodu"])
         self.cmb_mahalle.setEnabled(True)
+        self._refresh_gunluk_sorgu_sayisi()
         self._durum(f"{len(mahalleler)} mahalle yüklendi")
 
     # ──────────────────────────────────── Parsel Sorgulama ────────────────────
@@ -204,6 +208,7 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
 
     def _on_parsel_geldi(self, parsel: dict):
         self.btn_sorgula.setEnabled(True)
+        self._refresh_gunluk_sorgu_sayisi()
         self._son_parsel = parsel
         self._clear_bina_bb_alani()
         self.grp_bina_bb.setVisible(False)
@@ -247,6 +252,7 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
 
     def _on_parsel_hatasi(self, hata: str):
         self.btn_sorgula.setEnabled(True)
+        self._refresh_gunluk_sorgu_sayisi()
         self._hata(self._kullanici_hata_mesaji(hata, "Parsel bulunamadı"))
 
     def _on_bina_bb_sorgula(self):
@@ -296,6 +302,7 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
 
     def _on_bina_bb_listesi_geldi(self, bloklar: list):
         self.btn_bina_bb.setEnabled(True)
+        self._refresh_gunluk_sorgu_sayisi()
 
         if not bloklar:
             self.grp_bina_bb.setVisible(True)
@@ -331,6 +338,7 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
 
     def _on_bina_bb_hatasi(self, hata: str):
         self.btn_bina_bb.setEnabled(True)
+        self._refresh_gunluk_sorgu_sayisi()
         self._hata(self._kullanici_hata_mesaji(hata, "Bina/BB sorgusu başarısız"))
 
     def _clear_bina_bb_alani(self):
@@ -442,6 +450,16 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
     # ──────────────────────────────────── Yardımcı ────────────────────────────
     def _durum(self, mesaj: str):
         self.lbl_durum.setText(mesaj)
+
+    def _refresh_gunluk_sorgu_sayisi(self):
+        if not hasattr(self, "lbl_gunluk_sorgu"):
+            return
+        try:
+            from .tkgm_api import get_gunluk_sorgu_sayisi
+            sayi = get_gunluk_sorgu_sayisi()
+        except Exception:
+            sayi = 0
+        self.lbl_gunluk_sorgu.setText(f"Bugünkü sorgu: {sayi}")
 
     def _kullanici_hata_mesaji(self, hata: str, varsayilan: str) -> str:
         temiz_hata = (hata or "").strip()

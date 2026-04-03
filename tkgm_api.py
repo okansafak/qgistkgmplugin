@@ -6,6 +6,9 @@ Tüm HTTP isteklerini yönetir.
 import json
 import html
 import re
+from datetime import date
+from pathlib import Path
+import threading
 import urllib.parse
 import urllib.request
 import urllib.error
@@ -24,6 +27,59 @@ HEADERS = {
 TIMEOUT = 30
 ALLOWED_URL_SCHEMES = {"http", "https"}
 ALLOWED_URL_HOSTS = {"cbsapi.tkgm.gov.tr", "parselsorgu.tkgm.gov.tr"}
+QUERY_COUNTER_FILE = Path.home() / ".tkgm_parsel_plugin_query_stats.json"
+QUERY_COUNTER_LOCK = threading.Lock()
+
+
+def _bugun_str() -> str:
+    return date.today().isoformat()
+
+
+def _load_query_stats() -> dict:
+    today = _bugun_str()
+    varsayilan = {"date": today, "count": 0}
+
+    try:
+        if not QUERY_COUNTER_FILE.exists():
+            return varsayilan
+        data = json.loads(QUERY_COUNTER_FILE.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            return varsayilan
+    except Exception:
+        return varsayilan
+
+    raw_count = data.get("count", 0)
+    try:
+        count = max(0, int(raw_count))
+    except (TypeError, ValueError):
+        count = 0
+
+    if data.get("date") != today:
+        return {"date": today, "count": 0}
+    return {"date": today, "count": count}
+
+
+def _save_query_stats(stats: dict) -> None:
+    try:
+        QUERY_COUNTER_FILE.write_text(json.dumps(stats, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _increment_daily_query_count() -> int:
+    with QUERY_COUNTER_LOCK:
+        stats = _load_query_stats()
+        stats["count"] = int(stats.get("count", 0)) + 1
+        _save_query_stats(stats)
+        return stats["count"]
+
+
+def get_gunluk_sorgu_sayisi() -> int:
+    """Bugün yapılan toplam sorgu sayısını döner."""
+    with QUERY_COUNTER_LOCK:
+        stats = _load_query_stats()
+        _save_query_stats(stats)
+        return int(stats.get("count", 0))
 
 
 def _extract_message_from_raw(raw: str) -> Optional[str]:
@@ -63,10 +119,12 @@ def _validate_url(url: str) -> None:
 def _get(url: str) -> dict:
     """Verilen URL'ye GET isteği atar, JSON döner."""
     _validate_url(url)
+    _increment_daily_query_count()
     req = urllib.request.Request(url, headers=HEADERS)
+    opener = urllib.request.build_opener()
     try:
         # URL, şema + host allowlist kontrolünden geçtiği için burada kontrollü açılır.
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:  # nosec B310
+        with opener.open(req, timeout=TIMEOUT) as resp:
             raw = resp.read().decode("utf-8")
     except urllib.error.HTTPError as e:
         raw_err = ""
@@ -281,7 +339,11 @@ def get_parsel_blok_ve_bb_listesi(mahalle_kodu, ada_no, parsel_no) -> list:
     """Parseldeki tüm blokları ve her blok için bağımsız bölüm listesini döner."""
     bloklar = get_parsel_blok_listesi(mahalle_kodu, ada_no, parsel_no)
     for blok in bloklar:
+        # TKGM servisinde tek bloklu yapılarda blok değeri boş dönebilir;
+        # bagimsizbolum uç noktası bu durumda "0" bekler.
         blok_no = blok.get("blok")
+        if blok_no is None or str(blok_no).strip() == "":
+            blok_no = 0
         try:
             blok["bagimsizBolumler"] = get_parsel_bagimsiz_bolum_listesi(
                 mahalle_kodu,
