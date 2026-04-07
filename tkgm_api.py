@@ -216,6 +216,38 @@ def get_mahalle_listesi(ilce_kodu) -> list:
     return _parse_feature_collection(data, "mahalle")
 
 
+def _parse_gittigi_parseller(raw_liste) -> list:
+    """gittigiParselListe alanından hedef parselleri çıkarır."""
+    if raw_liste is None:
+        return []
+
+    data = raw_liste
+    if isinstance(raw_liste, str):
+        metin = raw_liste.strip()
+        if not metin:
+            return []
+        try:
+            data = json.loads(metin)
+        except Exception:
+            return []
+
+    if not isinstance(data, dict):
+        return []
+
+    result = []
+    for feature in data.get("features") or []:
+        props = feature.get("properties") or {}
+        ada_no = str(props.get("adaNo") or "").strip()
+        parsel_no = str(props.get("parselNo") or "").strip()
+        if parsel_no:
+            if ada_no:
+                result.append(f"{ada_no}/{parsel_no}")
+            else:
+                result.append(parsel_no)
+
+    return result
+
+
 def _parse_parsel_feature(data: dict, mahalle_kodu=None, ada_no=None, parsel_no=None) -> Optional[dict]:
     """GeoJSON Feature'dan parsel bilgisi çıkarır."""
     if data.get("Message"):
@@ -226,6 +258,8 @@ def _parse_parsel_feature(data: dict, mahalle_kodu=None, ada_no=None, parsel_no=
 
     props = data.get("properties") or {}
     geom = data.get("geometry") or {}
+    gittigi_liste_raw = props.get("gittigiParselListe")
+    gittigi_parseller = _parse_gittigi_parseller(gittigi_liste_raw)
 
     # Alan temizle
     alan_str = str(props.get("alan") or "0")
@@ -254,6 +288,10 @@ def _parse_parsel_feature(data: dict, mahalle_kodu=None, ada_no=None, parsel_no=
         "ilAd": props.get("ilAd") or "",
         "ilceAd": props.get("ilceAd") or "",
         "mahalleAd": props.get("mahalleAd") or "",
+        "durum": str(props.get("durum") if props.get("durum") is not None else ""),
+        "gittigiParselSebep": str(props.get("gittigiParselSebep") or "").strip(),
+        "gittigiParselListeRaw": gittigi_liste_raw,
+        "gittigiParseller": gittigi_parseller,
         "geometri": {
             "type": geom.get("type"),
             "coordinates": geom.get("coordinates"),

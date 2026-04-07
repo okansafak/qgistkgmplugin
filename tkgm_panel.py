@@ -213,6 +213,8 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
         self._clear_bina_bb_alani()
         self.grp_bina_bb.setVisible(False)
         self.lbl_bina_bb_ozet.setText("")
+        self.lbl_parsel_hareket_uyari.setVisible(False)
+        self.lbl_parsel_hareket_uyari.setText("")
 
         # Sonuç panelini doldur
         alan = parsel.get("alan") or 0
@@ -234,6 +236,9 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
         self._sonuc_etiketler["pafta"].setText(parsel.get("pafta") or "—")
 
         self.grp_sonuc.setVisible(True)
+        hareket_mesaji = self._guncelle_parsel_hareket_uyarisi(parsel)
+        if hareket_mesaji:
+            QMessageBox.information(self, "Parsel Hareket Uyarısı", hareket_mesaji)
 
         # Katmana ekle
         try:
@@ -450,6 +455,40 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
     # ──────────────────────────────────── Yardımcı ────────────────────────────
     def _durum(self, mesaj: str):
         self.lbl_durum.setText(mesaj)
+
+    def _parse_hareket_parsel_listesi(self, parsel: dict) -> list:
+        hedefler = parsel.get("gittigiParseller") or []
+        if isinstance(hedefler, list):
+            return [str(x).strip() for x in hedefler if str(x).strip()]
+        return []
+
+    def _olustur_parsel_hareket_mesaji(self, parsel: dict) -> str:
+        durum = str(parsel.get("durum") if parsel.get("durum") is not None else "").strip()
+        sebep = str(parsel.get("gittigiParselSebep") or "").strip()
+        hedefler = self._parse_hareket_parsel_listesi(parsel)
+
+        pasif = durum == "0"
+        if not pasif and not sebep and not hedefler:
+            return ""
+
+        mesaj_satirlari = ["Bu taşınmaz pasif durumdadır ve parsel hareketi içerir."]
+        if sebep:
+            mesaj_satirlari.append(f"Sebep: {sebep.strip()}")
+        if hedefler:
+            mesaj_satirlari.append(f"Gittiği parseller: {', '.join(hedefler)}")
+
+        return "\n".join(mesaj_satirlari)
+
+    def _guncelle_parsel_hareket_uyarisi(self, parsel: dict) -> str:
+        hareket_mesaji = self._olustur_parsel_hareket_mesaji(parsel)
+        if not hareket_mesaji:
+            self.lbl_parsel_hareket_uyari.setVisible(False)
+            self.lbl_parsel_hareket_uyari.setText("")
+            return ""
+
+        self.lbl_parsel_hareket_uyari.setText(hareket_mesaji)
+        self.lbl_parsel_hareket_uyari.setVisible(True)
+        return hareket_mesaji
 
     def _refresh_gunluk_sorgu_sayisi(self):
         if not hasattr(self, "lbl_gunluk_sorgu"):

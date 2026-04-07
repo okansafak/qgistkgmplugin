@@ -69,6 +69,16 @@ STIL_FORM_ELEMENTS = (
 STIL_ACIKLAMA = "color: #555; font-size: 11px;"
 STIL_SONUC_KEY = "font-weight: bold; color: #444;"
 STIL_KATMAN = "color: #2c7a4b; font-size: 11px;"
+STIL_UYARI = (
+    "QLabel {"
+    " background:#fff4d6;"
+    " border:1px solid #ead7a0;"
+    " border-radius:4px;"
+    " color:#7a5c1f;"
+    " padding:6px;"
+    " font-size:11px;"
+    "}"
+)
 STIL_DURUM = "color: #555; font-size: 11px; padding: 3px 0;"
 STIL_SORGU_SAYAC = "color: #2b4c7e; font-size: 11px; padding: 0 0 4px 0;"
 STIL_AKORDIYON_CONTAINER = "QWidget { background: #f7f9fa; border: 1px solid #d9e2ec; border-radius: 6px; }"
@@ -272,6 +282,12 @@ class Ui_TKGMPanel:
         self.lbl_katman.setStyleSheet(STIL_KATMAN)
         self.lbl_katman.setAlignment(AlignCenter)
         gs.addWidget(self.lbl_katman, len(SONUC_SATIRLARI) + 2, 0, 1, 2)
+
+        self.lbl_parsel_hareket_uyari = QLabel("")
+        self.lbl_parsel_hareket_uyari.setWordWrap(True)
+        self.lbl_parsel_hareket_uyari.setVisible(False)
+        self.lbl_parsel_hareket_uyari.setStyleSheet(STIL_UYARI)
+        gs.addWidget(self.lbl_parsel_hareket_uyari, len(SONUC_SATIRLARI) + 3, 0, 1, 2)
 
         layout.addWidget(self.grp_sonuc)
 
