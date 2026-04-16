@@ -19,7 +19,6 @@ SUPABASE_URL = os.getenv("TKGM_SUPABASE_URL", "https://pewfpbslwiclaqfhwkhg.supa
 SUPABASE_ANON_KEY = os.getenv("TKGM_SUPABASE_ANON_KEY", "sb_publishable_QCqUDjdVfKPPeJmXZup71Q_cBSJgFMi")
 
 SETTINGS_CONSENT_KEY = "TKGMParsel/metricsConsent"
-SETTINGS_ASKED_VERSION_KEY = "TKGMParsel/metricsAskedVersion"
 SETTINGS_ANON_UID_KEY = "TKGMParsel/metricsAnonUid"
 
 

@@ -69,6 +69,8 @@ create trigger validate_event_trigger
 create or replace function public.rate_limit_events()
 returns trigger
 language plpgsql
+security definer
+set search_path = public, pg_temp
 as $$
 declare
     recent_count int;
@@ -90,6 +92,9 @@ begin
 end;
 $$;
 
+revoke all on function public.rate_limit_events() from public;
+grant execute on function public.rate_limit_events() to anon;
+
 drop trigger if exists rate_limit_trigger on public.events;
 create trigger rate_limit_trigger
     before insert on public.events
@@ -99,13 +104,35 @@ create trigger rate_limit_trigger
 
 create or replace view public.events_daily as
 select
-    event_date,
+    coalesce(event_date, (received_at at time zone 'Europe/Istanbul')::date) as event_date,
     query_type,
-    status,
-    city,
-    count(*) as event_count,
-    count(distinct anon_user_id) as unique_users
+    coalesce(nullif(status, ''), 'unknown') as status,
+    coalesce(nullif(city, ''), 'unknown') as city,
+    sum(coalesce(count, 1))::bigint as event_count,
+    count(distinct anon_user_id) as unique_users,
+    count(*)::bigint as row_count
 from public.events
-where event_date is not null
-group by event_date, query_type, status, city
-order by event_date desc;
+group by 1, 2, 3, 4
+order by 1 desc;
+
+
+begin;
+
+-- 1) events tablosunda anonim role sadece INSERT kalsın
+revoke all on table public.events from anon, authenticated;
+grant insert on table public.events to anon;
+
+-- 1.1) REST insert için gerekli schema ve sequence izinleri
+-- (42501 hatalarının yaygın nedeni: schema/sequence usage eksikliği)
+grant usage on schema public to anon;
+grant usage, select on sequence public.events_id_seq to anon;
+
+-- 2) View okumasını tamamen kapat
+revoke all on table public.events_daily from anon, authenticated;
+
+-- 3) Gelecekte public schema'da yeni obje açılırsa otomatik read gelmesin
+alter default privileges in schema public revoke all on tables from anon, authenticated;
+alter default privileges in schema public revoke all on sequences from anon, authenticated;
+alter default privileges in schema public revoke all on functions from anon, authenticated;
+
+commit;

@@ -89,7 +89,7 @@ tkgm_parsel_plugin/
 
 ## 📊 Supabase Metrikleri
 
-Eklenti, isteğe bağlı anonim metrik göndermeyi destekler.
+Eklenti, kullanım koşulları kabulü sonrasında anonim metrik gönderimini aktif eder.
 
 ### Toplanan Alanlar
 - `query_type`
@@ -110,7 +110,7 @@ Eklenti, isteğe bağlı anonim metrik göndermeyi destekler.
 3. QGIS çalıştırma ortamına aşağıdaki değişkenleri ekleyin:
    - `TKGM_SUPABASE_URL`
    - `TKGM_SUPABASE_ANON_KEY`
-4. Eklentiyi açınca anonim metrik onayını verin (opt-in).
+4. Eklentiyi açıp kullanım koşullarını onaylayın.
 
 Not: Varsayılan Supabase URL ve publishable key eklenti içinde tanımlıdır; ortam değişkenleri verilirse bu değerlerin üzerine yazılır.
 
@@ -125,6 +125,7 @@ Not: Varsayılan Supabase URL ve publishable key eklenti içinde tanımlıdır; 
 
 | Sürüm | Tarih | Değişiklikler |
 |---|---|---|
+| **0.0.8** | 2026-04-16 | Ayrı metrik onayı kaldırıldı; kullanım koşulu onayı ile anonim metrik toplama otomatik aktif edildi |
 | **0.0.7** | 2026-04-16 | Supabase URL ve publishable key fallback değerleri eklendi (env var override destekli) |
 | **0.0.6** | 2026-04-16 | Supabase tabanlı anonim metrik altyapısı, opt-in onayı, batch gönderim, events SQL kurulum dosyası |
 | **0.0.1** | 2026-03-28 | İlk sürüm — Modüler mimari, parsel sorgulama, tıklama modu |

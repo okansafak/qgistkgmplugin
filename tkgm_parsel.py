@@ -22,7 +22,6 @@ from qgis.PyQt.QtWidgets import (
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtCore import Qt, QSettings
 from .metrics import (
-    SETTINGS_ASKED_VERSION_KEY,
     SETTINGS_CONSENT_KEY,
     SupabaseMetricsClient,
 )
@@ -83,14 +82,6 @@ KULLANIM_KOSULLARI_METNI = (
     "10- İhtilafların çözümünde Türkiye Cumhuriyeti kanunları uygulanır ve Ankara mahkemelerinin yetkili olduğu kabul edilir.\n"
     "11- Parsel Sorgulama Uygulamasının tüm hakları saklıdır."
 )
-
-ANONIM_METRIK_AYDINLATMA_METNI = (
-    "Anonim kullanım istatistikleri (isteğe bağlı):\n\n"
-    "Toplanan alanlar: sorgu tipi, başarı durumu, il/ilçe/mahalle, sürüm ve saat dilimi.\n"
-    "Toplanmayan alanlar: isim, parcel_id, ada/parsel, koordinat, dosya yolu.\n\n"
-    "Bu veri, eklentiyi geliştirmek ve hata oranlarını izlemek için kullanılır."
-)
-
 
 class KullanimKosullariDialog(QDialog):
     def __init__(self, parent=None):
@@ -177,8 +168,12 @@ class TKGMParselPlugin:
         onay_surum = settings.value(key, "", type=str)
         return onay_surum == self.plugin_version
 
+    def _metrik_iznini_kullanim_kosuluna_esitle(self) -> None:
+        QSettings().setValue(SETTINGS_CONSENT_KEY, True)
+
     def _kullanim_kosulu_onaylat(self) -> bool:
         if self._kullanim_kosulu_onayli_mi():
+            self._metrik_iznini_kullanim_kosuluna_esitle()
             return True
 
         dlg = KullanimKosullariDialog(self.iface.mainWindow())
@@ -202,23 +197,8 @@ class TKGMParselPlugin:
         except Exception:
             # Dosyaya yazılamazsa QSettings fallback devam eder.
             pass
+        self._metrik_iznini_kullanim_kosuluna_esitle()
         return True
-
-    def _metrik_onayi_sor_eger_gerekirse(self) -> None:
-        settings = QSettings()
-        sorulan_surum = settings.value(SETTINGS_ASKED_VERSION_KEY, "", type=str)
-        if str(sorulan_surum or "") == self.plugin_version:
-            return
-
-        cevap = QMessageBox.question(
-            self.iface.mainWindow(),
-            "TKGM Parsel - Anonim Metrik Onayı",
-            ANONIM_METRIK_AYDINLATMA_METNI,
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
-        settings.setValue(SETTINGS_CONSENT_KEY, cevap == QMessageBox.Yes)
-        settings.setValue(SETTINGS_ASKED_VERSION_KEY, self.plugin_version)
 
     def initGui(self):
         """QGIS arayüzüne eklenti öğelerini ekler."""
@@ -261,8 +241,6 @@ class TKGMParselPlugin:
                 if self.action:
                     self.action.setChecked(False)
                 return
-
-            self._metrik_onayi_sor_eger_gerekirse()
 
             if self.panel is None:
                 self.panel = TKGMPanel(self.iface)
