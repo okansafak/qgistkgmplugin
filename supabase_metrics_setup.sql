@@ -118,9 +118,9 @@ order by 1 desc;
 
 begin;
 
--- 1) events tablosunda anonim role sadece INSERT kalsın
+-- 1) events tablosunda anonim role INSERT ve SELECT ver
 revoke all on table public.events from anon, authenticated;
-grant insert on table public.events to anon;
+grant insert, select on table public.events to anon;
 
 -- 1.1) REST insert için gerekli schema ve sequence izinleri
 -- (42501 hatalarının yaygın nedeni: schema/sequence usage eksikliği)
@@ -136,3 +136,10 @@ alter default privileges in schema public revoke all on sequences from anon, aut
 alter default privileges in schema public revoke all on functions from anon, authenticated;
 
 commit;
+
+drop policy if exists "anon can select events" on public.events;
+create policy "anon can select events"
+  on public.events
+  for select
+  to anon
+  using (true);
