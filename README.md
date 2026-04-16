@@ -31,9 +31,11 @@ tkgm_parsel_plugin/
 ├── tkgm_panel.py          # Panel controller (sinyal/slot ve iş mantığı)
 ├── ui_tkgm_panel.py       # Arayüz tasarımı (widget oluşturma)
 ├── tkgm_api.py            # TKGM CBS API istemcisi
+├── metrics.py             # Supabase anonim metrik istemcisi
 ├── layer_manager.py       # QGIS katman yönetimi ve stil
 ├── map_tool.py            # Harita tıklama aracı
-└── workers.py             # Arka plan iş parçacıkları (QThread)
+├── workers.py             # Arka plan iş parçacıkları (QThread)
+└── supabase_metrics_setup.sql # Supabase tablo/RLS/trigger kurulum SQL'i
 ```
 
 ---
@@ -85,10 +87,46 @@ tkgm_parsel_plugin/
 
 ---
 
+## 📊 Supabase Metrikleri
+
+Eklenti, isteğe bağlı anonim metrik göndermeyi destekler.
+
+### Toplanan Alanlar
+- `query_type`
+- `status`
+- `city`, `district`, `neighborhood`
+- `event_date`, `event_hour`, `count`
+- `plugin_version`, `qgis_version`, `anon_user_id`
+
+### Toplanmayan Alanlar
+- `parcel_id`
+- ada/parsel numarası
+- koordinat
+- dosya yolu / kullanıcı adı
+
+### Kurulum
+1. Supabase projesi oluşturun (EU region önerilir).
+2. SQL Editor'de `supabase_metrics_setup.sql` dosyasını çalıştırın.
+3. QGIS çalıştırma ortamına aşağıdaki değişkenleri ekleyin:
+   - `TKGM_SUPABASE_URL`
+   - `TKGM_SUPABASE_ANON_KEY`
+4. Eklentiyi açınca anonim metrik onayını verin (opt-in).
+
+Not: Varsayılan Supabase URL ve publishable key eklenti içinde tanımlıdır; ortam değişkenleri verilirse bu değerlerin üzerine yazılır.
+
+### Güvenlik Notu
+- Plugin içinde yalnızca anon key kullanılır.
+- Veri okuma/yazma sınırları Supabase RLS policy'leri ile sağlanır.
+- `service_role` anahtarı plugin içinde kesinlikle kullanılmamalıdır.
+
+---
+
 ## 📋 Sürüm Geçmişi
 
 | Sürüm | Tarih | Değişiklikler |
 |---|---|---|
+| **0.0.7** | 2026-04-16 | Supabase URL ve publishable key fallback değerleri eklendi (env var override destekli) |
+| **0.0.6** | 2026-04-16 | Supabase tabanlı anonim metrik altyapısı, opt-in onayı, batch gönderim, events SQL kurulum dosyası |
 | **0.0.1** | 2026-03-28 | İlk sürüm — Modüler mimari, parsel sorgulama, tıklama modu |
 
 ---

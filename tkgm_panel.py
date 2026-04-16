@@ -73,6 +73,8 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
         super().__init__("TKGM Parsel Sorgulama")
         self.iface = iface
         self.canvas = iface.mapCanvas()
+        self._metrics_client = None
+        self._aktif_sorgu_tipi = ""
 
         # Aktif worker referansları (GC'den korunmak için)
         self._workers = []
@@ -94,6 +96,9 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
 
         # İl listesini yükle
         self._load_iller()
+
+    def set_metrics_client(self, metrics_client):
+        self._metrics_client = metrics_client
 
     # ─────────────────────────────────── Sinyal Bağlantıları ──────────────────
     def _connect_signals(self):
@@ -122,6 +127,7 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
         self.cmb_il.setEnabled(True)
         self.cmb_il.setPlaceholderText("")
         self._refresh_gunluk_sorgu_sayisi()
+        self._track_metric("il_loaded", status="success", extra={"count": len(iller)})
         self._durum(f"{len(iller)} il yüklendi")
 
     def _on_il_degisti(self, idx):
@@ -149,6 +155,7 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
             self.cmb_ilce.addItem(ilce["ilceAdi"], ilce["ilceKodu"])
         self.cmb_ilce.setEnabled(True)
         self._refresh_gunluk_sorgu_sayisi()
+        self._track_metric("ilce_loaded", status="success", extra={"count": len(ilceler)})
         self._durum(f"{len(ilceler)} ilçe yüklendi")
 
     def _on_ilce_degisti(self, idx):
@@ -174,6 +181,7 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
             self.cmb_mahalle.addItem(mah["mahalleAdi"], mah["mahalleKodu"])
         self.cmb_mahalle.setEnabled(True)
         self._refresh_gunluk_sorgu_sayisi()
+        self._track_metric("mahalle_loaded", status="success", extra={"count": len(mahalleler)})
         self._durum(f"{len(mahalleler)} mahalle yüklendi")
 
     # ──────────────────────────────────── Parsel Sorgulama ────────────────────
@@ -191,6 +199,9 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
 
         self._durum("Parsel sorgulanıyor...")
         self.btn_sorgula.setEnabled(False)
+        self._aktif_sorgu_tipi = "manual_query"
+        il, ilce, mahalle = self._secili_idari_birimler()
+        self._track_metric("manual_query", status="start", city=il, district=ilce, neighborhood=mahalle)
 
         w = ParselWorker(mah_kodu, ada, parsel)
         w.finished.connect(self._on_parsel_geldi)
@@ -200,6 +211,9 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
 
     def _sorgu_koordinat(self, lat, lng):
         self._durum(f"Koordinat sorgulanıyor: {lat:.6f}, {lng:.6f}")
+        self._aktif_sorgu_tipi = "map_click_query"
+        il, ilce, mahalle = self._secili_idari_birimler()
+        self._track_metric("map_click_query", status="start", city=il, district=ilce, neighborhood=mahalle)
         w = ParselKoordinatWorker(lat, lng)
         w.finished.connect(self._on_parsel_geldi)
         w.error.connect(self._on_parsel_hatasi)
@@ -210,6 +224,13 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
         self.btn_sorgula.setEnabled(True)
         self._refresh_gunluk_sorgu_sayisi()
         self._son_parsel = parsel
+        self._track_metric(
+            self._aktif_sorgu_tipi or "manual_query",
+            status="success",
+            city=parsel.get("ilAd") or "",
+            district=parsel.get("ilceAd") or "",
+            neighborhood=parsel.get("mahalleAd") or "",
+        )
         self._clear_bina_bb_alani()
         self.grp_bina_bb.setVisible(False)
         self.lbl_bina_bb_ozet.setText("")
@@ -258,6 +279,15 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
     def _on_parsel_hatasi(self, hata: str):
         self.btn_sorgula.setEnabled(True)
         self._refresh_gunluk_sorgu_sayisi()
+        il, ilce, mahalle = self._secili_idari_birimler()
+        self._track_metric(
+            self._aktif_sorgu_tipi or "manual_query",
+            status="error",
+            city=il,
+            district=ilce,
+            neighborhood=mahalle,
+            extra={"error_code": self._hata_kodu(hata)},
+        )
         self._hata(self._kullanici_hata_mesaji(hata, "Parsel bulunamadı"))
 
     def _on_bina_bb_sorgula(self):
@@ -298,6 +328,9 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
         self._durum("Bina/BB listesi sorgulanıyor...")
         self.btn_bina_bb.setEnabled(False)
         self._clear_bina_bb_alani()
+        self._aktif_sorgu_tipi = "building_bb_query"
+        il, ilce, mahalle = self._secili_idari_birimler()
+        self._track_metric("building_bb_query", status="start", city=il, district=ilce, neighborhood=mahalle)
 
         w = ParselBlokVeBBWorker(mahalle_kodu, ada_no, parsel_no)
         w.finished.connect(self._on_bina_bb_listesi_geldi)
@@ -308,6 +341,15 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
     def _on_bina_bb_listesi_geldi(self, bloklar: list):
         self.btn_bina_bb.setEnabled(True)
         self._refresh_gunluk_sorgu_sayisi()
+        il, ilce, mahalle = self._secili_idari_birimler()
+        self._track_metric(
+            "building_bb_query",
+            status="success",
+            city=il,
+            district=ilce,
+            neighborhood=mahalle,
+            extra={"blok_count": len(bloklar)},
+        )
 
         if not bloklar:
             self.grp_bina_bb.setVisible(True)
@@ -344,6 +386,15 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
     def _on_bina_bb_hatasi(self, hata: str):
         self.btn_bina_bb.setEnabled(True)
         self._refresh_gunluk_sorgu_sayisi()
+        il, ilce, mahalle = self._secili_idari_birimler()
+        self._track_metric(
+            "building_bb_query",
+            status="error",
+            city=il,
+            district=ilce,
+            neighborhood=mahalle,
+            extra={"error_code": self._hata_kodu(hata)},
+        )
         self._hata(self._kullanici_hata_mesaji(hata, "Bina/BB sorgusu başarısız"))
 
     def _clear_bina_bb_alani(self):
@@ -455,6 +506,52 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
     # ──────────────────────────────────── Yardımcı ────────────────────────────
     def _durum(self, mesaj: str):
         self.lbl_durum.setText(mesaj)
+
+    def _temiz_idari_birim_metni(self, text: str) -> str:
+        value = str(text or "").strip()
+        if not value or value.startswith("—") or value.lower().startswith("yükleniyor"):
+            return ""
+        return value
+
+    def _secili_idari_birimler(self):
+        il = self._temiz_idari_birim_metni(self.cmb_il.currentText())
+        ilce = self._temiz_idari_birim_metni(self.cmb_ilce.currentText())
+        mahalle = self._temiz_idari_birim_metni(self.cmb_mahalle.currentText())
+        return il, ilce, mahalle
+
+    def _hata_kodu(self, hata: str) -> str:
+        metin = str(hata or "").lower()
+        if "http 403" in metin:
+            return "http_403"
+        if "timeout" in metin:
+            return "timeout"
+        if "http " in metin:
+            return "http_error"
+        return "api_error"
+
+    def _track_metric(
+        self,
+        query_type: str,
+        status: str,
+        city: str = "",
+        district: str = "",
+        neighborhood: str = "",
+        extra: dict = None,
+    ) -> None:
+        if not self._metrics_client:
+            return
+        try:
+            self._metrics_client.track(
+                query_type=query_type,
+                status=status,
+                city=city,
+                district=district,
+                neighborhood=neighborhood,
+                extra=extra,
+            )
+        except Exception:
+            # Metrik hatası kullanıcı akışını etkilememeli.
+            pass
 
     def _parse_hareket_parsel_listesi(self, parsel: dict) -> list:
         hedefler = parsel.get("gittigiParseller") or []

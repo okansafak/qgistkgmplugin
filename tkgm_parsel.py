@@ -21,6 +21,11 @@ from qgis.PyQt.QtWidgets import (
 )
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtCore import Qt, QSettings
+from .metrics import (
+    SETTINGS_ASKED_VERSION_KEY,
+    SETTINGS_CONSENT_KEY,
+    SupabaseMetricsClient,
+)
 
 def _get_qt_flag(scope, name):
     if hasattr(Qt, scope):
@@ -79,6 +84,13 @@ KULLANIM_KOSULLARI_METNI = (
     "11- Parsel Sorgulama Uygulamasının tüm hakları saklıdır."
 )
 
+ANONIM_METRIK_AYDINLATMA_METNI = (
+    "Anonim kullanım istatistikleri (isteğe bağlı):\n\n"
+    "Toplanan alanlar: sorgu tipi, başarı durumu, il/ilçe/mahalle, sürüm ve saat dilimi.\n"
+    "Toplanmayan alanlar: isim, parcel_id, ada/parsel, koordinat, dosya yolu.\n\n"
+    "Bu veri, eklentiyi geliştirmek ve hata oranlarını izlemek için kullanılır."
+)
+
 
 class KullanimKosullariDialog(QDialog):
     def __init__(self, parent=None):
@@ -119,6 +131,7 @@ class TKGMParselPlugin:
         self.panel = None
         self.action = None
         self.plugin_version = self._plugin_surumu_oku()
+        self.metrics = SupabaseMetricsClient(plugin_version=self.plugin_version)
 
     def _plugin_surumu_oku(self) -> str:
         metadata = os.path.join(os.path.dirname(__file__), "metadata.txt")
@@ -191,6 +204,22 @@ class TKGMParselPlugin:
             pass
         return True
 
+    def _metrik_onayi_sor_eger_gerekirse(self) -> None:
+        settings = QSettings()
+        sorulan_surum = settings.value(SETTINGS_ASKED_VERSION_KEY, "", type=str)
+        if str(sorulan_surum or "") == self.plugin_version:
+            return
+
+        cevap = QMessageBox.question(
+            self.iface.mainWindow(),
+            "TKGM Parsel - Anonim Metrik Onayı",
+            ANONIM_METRIK_AYDINLATMA_METNI,
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        settings.setValue(SETTINGS_CONSENT_KEY, cevap == QMessageBox.Yes)
+        settings.setValue(SETTINGS_ASKED_VERSION_KEY, self.plugin_version)
+
     def initGui(self):
         """QGIS arayüzüne eklenti öğelerini ekler."""
         icon_path = os.path.join(os.path.dirname(__file__), "icon.png")
@@ -209,6 +238,11 @@ class TKGMParselPlugin:
 
     def unload(self):
         """Eklenti kaldırıldığında temizlik yapar."""
+        try:
+            self.metrics.flush()
+        except Exception:
+            pass
+
         self.iface.removePluginMenu("&TKGM Parsel", self.action)
         self.iface.removeToolBarIcon(self.action)
 
@@ -228,14 +262,19 @@ class TKGMParselPlugin:
                     self.action.setChecked(False)
                 return
 
+            self._metrik_onayi_sor_eger_gerekirse()
+
             if self.panel is None:
                 self.panel = TKGMPanel(self.iface)
+                self.panel.set_metrics_client(self.metrics)
                 self.panel.setAllowedAreas(
                     LeftDockWidgetArea | RightDockWidgetArea
                 )
                 self.iface.addDockWidget(RightDockWidgetArea, self.panel)
                 self.panel.visibilityChanged.connect(self._on_panel_visibility)
+                self.metrics.track("plugin_start", status="success")
             else:
+                self.panel.set_metrics_client(self.metrics)
                 self.panel.show()
         else:
             if self.panel:
