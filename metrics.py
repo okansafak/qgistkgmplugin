@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 from qgis.PyQt.QtCore import QByteArray, QSettings, QTimer, QUrl
 from qgis.PyQt.QtNetwork import QNetworkRequest
-from qgis.core import Qgis, QgsNetworkAccessManager
+from qgis.core import Qgis, QgsMessageLog, QgsNetworkAccessManager
 
 
 SUPABASE_URL = os.getenv("TKGM_SUPABASE_URL", "https://pewfpbslwiclaqfhwkhg.supabase.co")
@@ -20,6 +20,28 @@ SUPABASE_ANON_KEY = os.getenv("TKGM_SUPABASE_ANON_KEY", "sb_publishable_QCqUDjdV
 
 SETTINGS_CONSENT_KEY = "TKGMParsel/metricsConsent"
 SETTINGS_ANON_UID_KEY = "TKGMParsel/metricsAnonUid"
+LOG_TAG = "TKGM Parsel"
+
+
+def _get_content_type_header_enum():
+    """Qt5/Qt6 uyumlu ContentTypeHeader enum değerini döndürür."""
+    if hasattr(QNetworkRequest, "KnownHeaders") and hasattr(QNetworkRequest.KnownHeaders, "ContentTypeHeader"):
+        return QNetworkRequest.KnownHeaders.ContentTypeHeader
+    if hasattr(QNetworkRequest, "ContentTypeHeader"):
+        return QNetworkRequest.ContentTypeHeader
+    return None
+
+
+def _qgis_log_level_info():
+    if hasattr(Qgis, "MessageLevel") and hasattr(Qgis.MessageLevel, "Info"):
+        return Qgis.MessageLevel.Info
+    return getattr(Qgis, "Info", 0)
+
+
+def _qgis_log_level_warning():
+    if hasattr(Qgis, "MessageLevel") and hasattr(Qgis.MessageLevel, "Warning"):
+        return Qgis.MessageLevel.Warning
+    return getattr(Qgis, "Warning", 1)
 
 
 class SupabaseMetricsClient:
@@ -35,6 +57,7 @@ class SupabaseMetricsClient:
         self._timer = QTimer()
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self.flush)
+        self._content_type_header = _get_content_type_header_enum()
 
     def is_configured(self) -> bool:
         return bool(self.endpoint and SUPABASE_ANON_KEY.strip())
@@ -100,15 +123,55 @@ class SupabaseMetricsClient:
         batch = self._queue.copy()
         self._queue.clear()
 
-        req = QNetworkRequest(QUrl(self.endpoint))
-        req.setHeader(QNetworkRequest.ContentTypeHeader, "application/json")
-        req.setRawHeader(b"apikey", SUPABASE_ANON_KEY.encode("utf-8"))
-        req.setRawHeader(b"Authorization", f"Bearer {SUPABASE_ANON_KEY}".encode("utf-8"))
-        req.setRawHeader(b"Prefer", b"return=minimal")
+        try:
+            req = QNetworkRequest(QUrl(self.endpoint))
+            if self._content_type_header is not None:
+                req.setHeader(self._content_type_header, "application/json")
+            else:
+                req.setRawHeader(b"Content-Type", b"application/json")
 
-        body = QByteArray(json.dumps(batch, ensure_ascii=False).encode("utf-8"))
-        reply = QgsNetworkAccessManager.instance().post(req, body)
-        reply.finished.connect(reply.deleteLater)
+            req.setRawHeader(b"apikey", SUPABASE_ANON_KEY.encode("utf-8"))
+            req.setRawHeader(b"Authorization", f"Bearer {SUPABASE_ANON_KEY}".encode("utf-8"))
+            req.setRawHeader(b"Prefer", b"return=minimal")
+
+            body = QByteArray(json.dumps(batch, ensure_ascii=False).encode("utf-8"))
+            reply = QgsNetworkAccessManager.instance().post(req, body)
+            reply.finished.connect(lambda: self._on_flush_finished(reply, batch))
+        except Exception as e:
+            # Gönderim hazırlığında hata olursa batch'i kaybetme.
+            self._queue = batch + self._queue
+            self._log(f"Metrik flush hazırlığı başarısız: {e}", warning=True)
+            if not self._timer.isActive():
+                self._timer.start(self.flush_ms)
+
+    def _on_flush_finished(self, reply, batch) -> None:
+        try:
+            has_error = int(reply.error()) != 0
+            if has_error:
+                self._queue = batch + self._queue
+                self._log(f"Metrik gönderimi başarısız: {reply.errorString()}", warning=True)
+                if not self._timer.isActive():
+                    self._timer.start(self.flush_ms)
+                return
+
+            status = reply.attribute(QNetworkRequest.HttpStatusCodeAttribute)
+            if status is not None and int(status) >= 400:
+                self._queue = batch + self._queue
+                self._log(f"Metrik gönderimi HTTP hatası: {status}", warning=True)
+                if not self._timer.isActive():
+                    self._timer.start(self.flush_ms)
+                return
+        except Exception as e:
+            self._queue = batch + self._queue
+            self._log(f"Metrik yanıt işleme hatası: {e}", warning=True)
+            if not self._timer.isActive():
+                self._timer.start(self.flush_ms)
+        finally:
+            reply.deleteLater()
+
+    def _log(self, message: str, warning: bool = False) -> None:
+        level = _qgis_log_level_warning() if warning else _qgis_log_level_info()
+        QgsMessageLog.logMessage(str(message), LOG_TAG, level)
 
     def _clean_text(self, value: str) -> str:
         text = str(value or "").strip()

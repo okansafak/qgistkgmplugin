@@ -125,6 +125,7 @@ Not: Varsayılan Supabase URL ve publishable key eklenti içinde tanımlıdır; 
 
 | Sürüm | Tarih | Değişiklikler |
 |---|---|---|
+| **0.0.9** | 2026-04-17 | QGIS 4.0 (Qt6) uyumluluğu için metrik gönderimi düzeltildi; ağ/HTTP hata loglama ve retry eklendi |
 | **0.0.8** | 2026-04-16 | Ayrı metrik onayı kaldırıldı; kullanım koşulu onayı ile anonim metrik toplama otomatik aktif edildi |
 | **0.0.7** | 2026-04-16 | Supabase URL ve publishable key fallback değerleri eklendi (env var override destekli) |
 | **0.0.6** | 2026-04-16 | Supabase tabanlı anonim metrik altyapısı, opt-in onayı, batch gönderim, events SQL kurulum dosyası |
