@@ -101,7 +101,7 @@ def _etiket_ayarla(layer: QgsVectorLayer) -> None:
     # "Ada: 112\nParsel: 5" formatında iki satır etiket
     pal.fieldName = "'Ada: ' || adaNo || '\\nParsel: ' || parselNo"
     pal.isExpression = True
-    pal.placement = QgsPalLayerSettings.AroundPoint
+    pal.placement = getattr(getattr(QgsPalLayerSettings, "Placement", QgsPalLayerSettings), "AroundPoint")
     pal.enabled = True
 
     layer.setLabeling(QgsVectorLayerSimpleLabeling(pal))

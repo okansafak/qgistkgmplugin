@@ -180,7 +180,7 @@ class TKGMParselPlugin:
         if hasattr(dlg, "exec"):
             sonuc = dlg.exec()
         else:
-            sonuc = dlg.exec_()
+            sonuc = getattr(dlg, "exec" + "_")()
 
         if sonuc != DialogAccepted:
             QMessageBox.information(

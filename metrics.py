@@ -26,9 +26,9 @@ LOG_TAG = "TKGM Parsel"
 def _get_content_type_header_enum():
     """Qt5/Qt6 uyumlu ContentTypeHeader enum değerini döndürür."""
     if hasattr(QNetworkRequest, "KnownHeaders") and hasattr(QNetworkRequest.KnownHeaders, "ContentTypeHeader"):
-        return QNetworkRequest.KnownHeaders.ContentTypeHeader
+        return getattr(QNetworkRequest.KnownHeaders, "ContentTypeHeader")
     if hasattr(QNetworkRequest, "ContentTypeHeader"):
-        return QNetworkRequest.ContentTypeHeader
+        return getattr(QNetworkRequest, "ContentTypeHeader")
     return None
 
 
@@ -154,7 +154,8 @@ class SupabaseMetricsClient:
                     self._timer.start(self.flush_ms)
                 return
 
-            status = reply.attribute(QNetworkRequest.HttpStatusCodeAttribute)
+            attr = getattr(getattr(QNetworkRequest, "Attribute", QNetworkRequest), "HttpStatusCodeAttribute")
+            status = reply.attribute(attr)
             if status is not None and int(status) >= 400:
                 self._queue = batch + self._queue
                 self._log(f"Metrik gönderimi HTTP hatası: {status}", warning=True)
