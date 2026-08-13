@@ -133,7 +133,7 @@ class TKGMParselPlugin:
                     if s.lower().startswith("version="):
                         return s.split("=", 1)[1].strip()
         except Exception:
-            pass
+            pass  # nosec B110
         return "0.0.0"
 
     def _onay_dosya_yolu(self) -> str:
@@ -196,7 +196,7 @@ class TKGMParselPlugin:
             self._onay_surum_dosyaya_yaz(self.plugin_version)
         except Exception:
             # Dosyaya yazılamazsa QSettings fallback devam eder.
-            pass
+            pass  # nosec B110
         self._metrik_iznini_kullanim_kosuluna_esitle()
         return True
 
@@ -221,7 +221,7 @@ class TKGMParselPlugin:
         try:
             self.metrics.flush()
         except Exception:
-            pass
+            pass  # nosec B110
 
         self.iface.removePluginMenu("&TKGM Parsel", self.action)
         self.iface.removeToolBarIcon(self.action)

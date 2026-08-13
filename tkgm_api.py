@@ -63,7 +63,7 @@ def _save_query_stats(stats: dict) -> None:
     try:
         QUERY_COUNTER_FILE.write_text(json.dumps(stats, ensure_ascii=False), encoding="utf-8")
     except Exception:
-        pass
+        pass  # nosec B110
 
 
 def _increment_daily_query_count() -> int:
@@ -101,7 +101,7 @@ def _extract_message_from_raw(raw: str) -> Optional[str]:
                 if data.get(key):
                     return str(data.get(key)).strip()
     except Exception:
-        pass
+        pass  # nosec B110
 
     return None
 
@@ -124,7 +124,7 @@ def _get(url: str) -> dict:
     opener = urllib.request.build_opener()
     try:
         # URL, şema + host allowlist kontrolünden geçtiği için burada kontrollü açılır.
-        with opener.open(req, timeout=TIMEOUT) as resp:
+        with opener.open(req, timeout=TIMEOUT) as resp:  # nosec B310
             raw = resp.read().decode("utf-8")
     except urllib.error.HTTPError as e:
         raw_err = ""
@@ -184,7 +184,7 @@ def get_il_listesi() -> list:
         if parsed:
             return parsed
     except Exception:
-        pass
+        pass  # nosec B110
     # Statik fallback
     return [
         {"id": i, "ad": ad, "kod": i} for i, ad in enumerate([

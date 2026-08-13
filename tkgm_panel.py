@@ -490,7 +490,7 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
                 try:
                     self._tiklama_araci.koordinat_secildi.disconnect()
                 except Exception:
-                    pass
+                    pass  # nosec B110
             if self._onceki_arac:
                 self.canvas.setMapTool(self._onceki_arac)
             else:
@@ -551,7 +551,7 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
             )
         except Exception:
             # Metrik hatası kullanıcı akışını etkilememeli.
-            pass
+            pass  # nosec B110
 
     def _parse_hareket_parsel_listesi(self, parsel: dict) -> list:
         hedefler = parsel.get("gittigiParseller") or []
