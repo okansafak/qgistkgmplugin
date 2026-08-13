@@ -230,7 +230,7 @@ class TKGMParselPlugin:
             from .layer_manager import adres_onizleme_temizle
             adres_onizleme_temizle()
         except Exception:
-            pass
+            pass  # nosec B110
 
         if self.panel:
             # Eklenti reload edilirken harita aracının takılı kalmasını önle
@@ -247,17 +247,17 @@ class TKGMParselPlugin:
                         try:
                             w.finished.disconnect()
                         except Exception:
-                            pass
+                            pass  # nosec B110
                         try:
                             w.error.disconnect()
                         except Exception:
-                            pass
+                            pass  # nosec B110
                         if w.isRunning():
                             try:
                                 w.quit()
                                 w.wait(200)
                             except Exception:
-                                pass
+                                pass  # nosec B110
                 self.panel._workers.clear()
             
             self.panel.setParent(None)

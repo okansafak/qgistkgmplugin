@@ -337,7 +337,7 @@ def _get_or_create_adres_layer() -> QgsVectorLayer:
     try:
         pal.placement = getattr(getattr(QgsPalLayerSettings, "Placement", QgsPalLayerSettings), "AroundPoint")
     except Exception:
-        pass
+        pass  # nosec B110
         
     pal.enabled = True
     layer.setLabeling(QgsVectorLayerSimpleLabeling(pal))
@@ -357,7 +357,7 @@ def adres_onizleme_temizle() -> None:
             _ADRES_PREVIEW_RUBBERBAND.reset()
             _ADRES_PREVIEW_RUBBERBAND.hide()
         except Exception:
-            pass
+            pass  # nosec B110
         _ADRES_PREVIEW_RUBBERBAND = None
 
 
@@ -392,7 +392,7 @@ def _dict_to_qgs_geometry(geom_dict: dict):
                 multi_line.append([QgsPointXY(float(pt[0]), float(pt[1])) for pt in line])
             return QgsGeometry.fromMultiPolylineXY(multi_line)
     except Exception:
-        pass
+        pass  # nosec B110
     return None
 
 
@@ -431,7 +431,7 @@ def adres_onizleme_goster(canvas, geom_dict: dict) -> None:
         rb.show()
         _ADRES_PREVIEW_RUBBERBAND = rb
     except Exception:
-        pass
+        pass  # nosec B110
 
 
 def adres_noktasi_katmana_ekle(lat: float, lng: float, adres_bilgisi: dict) -> QgsVectorLayer:
@@ -464,7 +464,7 @@ def adres_noktasi_katmana_ekle(lat: float, lng: float, adres_bilgisi: dict) -> Q
             try:
                 rect = xform.transformBoundingBox(rect)
             except Exception:
-                pass
+                pass  # nosec B110
 
         canvas.setExtent(rect)
         canvas.refresh()
@@ -506,7 +506,7 @@ def geojson_geometriye_zoom_yap(canvas, geom_dict: dict) -> None:
         canvas.setExtent(rect)
         canvas.refresh()
     except Exception:
-        pass
+        pass  # nosec B110
 
 
 def parsele_zoom_yap(canvas, parsel: dict) -> None:

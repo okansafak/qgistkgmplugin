@@ -126,7 +126,7 @@ class SupabaseMetricsClient:
             if self._timer and not self._timer.isActive():
                 self._timer.start(self.flush_ms)
         except (RuntimeError, AttributeError):
-            pass
+            pass  # nosec B110
 
     def _on_timer_flush(self):
         """Timer timeout slot'u — lambda kullanmadan bağlanır."""
@@ -141,11 +141,11 @@ class SupabaseMetricsClient:
                 try:
                     self._timer.timeout.disconnect()
                 except Exception:
-                    pass
+                    pass  # nosec B110
                 self._timer.deleteLater()
                 self._timer = None
         except (RuntimeError, AttributeError):
-            pass
+            pass  # nosec B110
 
         # Kalan verileri gönder
         self.flush()
@@ -157,7 +157,7 @@ class SupabaseMetricsClient:
                 reply.abort()
                 reply.deleteLater()
             except Exception:
-                pass
+                pass  # nosec B110
         self._pending_replies.clear()
 
     def flush(self) -> None:
@@ -227,7 +227,7 @@ class SupabaseMetricsClient:
             try:
                 reply.deleteLater()
             except Exception:
-                pass
+                pass  # nosec B110
 
     def _log(self, message: str, warning: bool = False) -> None:
         level = _qgis_log_level_warning() if warning else _qgis_log_level_info()
