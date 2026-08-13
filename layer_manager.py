@@ -248,44 +248,265 @@ def bagimsiz_bolumleri_katmana_ekle(parsel: dict, bloklar: list) -> tuple:
                 str(f["bbNo"] or ""),
             )
         )
+    parsel_anahtar = _parsel_anahtar_uret(mahalle_kodu, ada_no, parsel_no)
 
-    yeni_featler = []
-    eklenen = 0
-    atlanan = 0
+    # Mevcut kayıtları temizle (bu parsele ait olanları)
+    silinecek_id_listesi = []
+    for feat in bb_layer.getFeatures():
+        if str(feat.attribute("parselAnahtar")) == parsel_anahtar:
+            silinecek_id_listesi.append(feat.id())
 
-    for blok in bloklar or []:
-        blok_no = str(blok.get("blok") or "")
-        for bb in blok.get("bagimsizBolumler") or []:
-            bb_no = str(bb.get("no") or "")
-            anahtar = (parsel_key, blok_no, bb_no)
-            if anahtar in mevcut_anahtarlar:
-                atlanan += 1
-                continue
+    bb_layer.startEditing()
+    if silinecek_id_listesi:
+        bb_layer.dataProvider().deleteFeatures(silinecek_id_listesi)
 
-            feat = QgsFeature(bb_layer.fields())
-            feat.setAttributes([
-                parsel_key,
-                mahalle_kodu,
-                ada_no,
-                parsel_no,
-                blok_no,
-                bb_no,
-                str(bb.get("tip") or ""),
-                str(bb.get("kat") or ""),
-                str(bb.get("giris") or ""),
-                str(bb.get("nitelik") or ""),
-                str(bb.get("durum") or ""),
-            ])
-            yeni_featler.append(feat)
-            mevcut_anahtarlar.add(anahtar)
-            eklenen += 1
+    # Yeni kayıtları ekle
+    yeni_kayitlar = []
+    fields = bb_layer.fields()
 
-    if yeni_featler:
-        bb_layer.dataProvider().addFeatures(yeni_featler)
-        bb_layer.updateExtents()
-        bb_layer.triggerRepaint()
+    for blok in bloklar_guvenli(blok_listesi):
+        bb_arr = blok.get("bagimsizBolumler")
+        if not bb_arr:
+            continue
+        
+        for bb in bb_arr:
+            feat = QgsFeature(fields)
+            feat.setAttribute("parselAnahtar", parsel_anahtar)
+            feat.setAttribute("blok", blok.get("blok") or "")
+            feat.setAttribute("bbNo", str(bb.get("no") or ""))
+            feat.setAttribute("tip", bb.get("tip") or "")
+            feat.setAttribute("kat", bb.get("kat") or "")
+            feat.setAttribute("giris", bb.get("giris") or "")
+            feat.setAttribute("nitelik", bb.get("nitelik") or "")
+            feat.setAttribute("durum", str(bb.get("durum") or ""))
+            yeni_kayitlar.append(feat)
 
-    return eklenen, atlanan
+    if yeni_kayitlar:
+        bb_layer.dataProvider().addFeatures(yeni_kayitlar)
+    
+    bb_layer.commitChanges()
+    bb_layer.triggerRepaint()
+    return True
+
+
+KATMAN_ADRES_ADI = "TKGM Adresler"
+
+def _get_or_create_adres_layer() -> QgsVectorLayer:
+    """Mevcut adres katmanını bulur, yoksa yeni (Point) oluşturur."""
+    for layer in QgsProject.instance().mapLayers().values():
+        if layer.name() == KATMAN_ADRES_ADI:
+            return layer
+
+    layer = QgsVectorLayer("Point?crs=EPSG:4326", KATMAN_ADRES_ADI, "memory")
+    pr = layer.dataProvider()
+    pr.addAttributes([
+        QgsField("il", TYPE_STRING),
+        QgsField("ilce", TYPE_STRING),
+        QgsField("mahalle", TYPE_STRING),
+        QgsField("yol", TYPE_STRING),
+        QgsField("kapiNo", TYPE_STRING),
+        QgsField("tamAdres", TYPE_STRING),
+    ])
+    layer.updateFields()
+
+    # Stil
+    try:
+        from qgis.core import QgsMarkerSymbol
+        sembol = QgsMarkerSymbol.createSimple({'color': '227,26,28', 'size': '4', 'outline_color': 'white'})
+        if hasattr(layer, "renderer") and layer.renderer():
+            layer.renderer().setSymbol(sembol)
+    except Exception:
+        pass  # nosec B110
+
+    # Etiket
+    metin_fmt = QgsTextFormat()
+    metin_fmt.setFont(QFont("Arial", 9))
+    metin_fmt.setColor(QColor(40, 40, 40))
+    tampon = QgsTextBufferSettings()
+    tampon.setEnabled(True)
+    tampon.setSize(1.0)
+    tampon.setColor(QColor(255, 255, 255, 200))
+    metin_fmt.setBuffer(tampon)
+
+    pal = QgsPalLayerSettings()
+    pal.setFormat(metin_fmt)
+    pal.fieldName = "kapiNo"
+    pal.isExpression = False
+    
+    # QgsPalLayerSettings.Placement.AroundPoint için dinamik enum:
+    try:
+        pal.placement = getattr(getattr(QgsPalLayerSettings, "Placement", QgsPalLayerSettings), "AroundPoint")
+    except Exception:
+        pass
+        
+    pal.enabled = True
+    layer.setLabeling(QgsVectorLayerSimpleLabeling(pal))
+    layer.setLabelsEnabled(True)
+
+    QgsProject.instance().addMapLayer(layer)
+    return layer
+
+_ADRES_PREVIEW_RUBBERBAND = None
+
+
+def adres_onizleme_temizle() -> None:
+    """Mevcut adres önizleme vurgusunu haritadan temizler."""
+    global _ADRES_PREVIEW_RUBBERBAND
+    if _ADRES_PREVIEW_RUBBERBAND is not None:
+        try:
+            _ADRES_PREVIEW_RUBBERBAND.reset()
+            _ADRES_PREVIEW_RUBBERBAND.hide()
+        except Exception:
+            pass
+        _ADRES_PREVIEW_RUBBERBAND = None
+
+
+def _dict_to_qgs_geometry(geom_dict: dict):
+    """GeoJSON sözlüğünü QgsGeometry nesnesine dönüştürür."""
+    if not geom_dict:
+        return None
+    try:
+        from qgis.core import QgsGeometry, QgsPointXY
+        gt = geom_dict.get("type")
+        coords = geom_dict.get("coordinates")
+        if not gt or not coords:
+            return None
+
+        if gt == "Point":
+            return QgsGeometry.fromPointXY(QgsPointXY(float(coords[0]), float(coords[1])))
+        elif gt == "Polygon":
+            points = [QgsPointXY(float(pt[0]), float(pt[1])) for pt in coords[0]]
+            return QgsGeometry.fromPolygonXY([points])
+        elif gt == "MultiPolygon":
+            multi_poly = []
+            for poly in coords:
+                points = [QgsPointXY(float(pt[0]), float(pt[1])) for pt in poly[0]]
+                multi_poly.append([points])
+            return QgsGeometry.fromMultiPolygonXY(multi_poly)
+        elif gt == "LineString":
+            points = [QgsPointXY(float(pt[0]), float(pt[1])) for pt in coords]
+            return QgsGeometry.fromPolylineXY(points)
+        elif gt == "MultiLineString":
+            multi_line = []
+            for line in coords:
+                multi_line.append([QgsPointXY(float(pt[0]), float(pt[1])) for pt in line])
+            return QgsGeometry.fromMultiPolylineXY(multi_line)
+    except Exception:
+        pass
+    return None
+
+
+def adres_onizleme_goster(canvas, geom_dict: dict) -> None:
+    """GeoJSON sözlüğünden haritada önizleme rubberband oluşturur ve önceki önizlemeyi temizler."""
+    global _ADRES_PREVIEW_RUBBERBAND
+    adres_onizleme_temizle()
+
+    if not canvas or not geom_dict:
+        return
+
+    try:
+        from qgis.gui import QgsRubberBand
+        from qgis.core import QgsCoordinateReferenceSystem, QgsWkbTypes
+        from qgis.PyQt.QtGui import QColor
+
+        qgs_geom = _dict_to_qgs_geometry(geom_dict)
+        if not qgs_geom or qgs_geom.isEmpty():
+            return
+
+        g_type = qgs_geom.type()
+        rb = QgsRubberBand(canvas, g_type)
+
+        # Şık mavi/turkuaz önizleme stili
+        rb.setColor(QColor(0, 150, 255, 65))
+        rb.setStrokeColor(QColor(0, 120, 220, 230))
+        rb.setWidth(2)
+
+        if hasattr(QgsWkbTypes, "PointGeometry") and g_type == QgsWkbTypes.PointGeometry:
+            rb.setIconSize(10)
+        elif g_type == 0:
+            rb.setIconSize(10)
+
+        crs_src = QgsCoordinateReferenceSystem("EPSG:4326")
+        rb.setToGeometry(qgs_geom, crs_src)
+        rb.show()
+        _ADRES_PREVIEW_RUBBERBAND = rb
+    except Exception:
+        pass
+
+
+def adres_noktasi_katmana_ekle(lat: float, lng: float, adres_bilgisi: dict) -> QgsVectorLayer:
+    """Adres bilgisini haritaya ve öznitelik tablosuna ekler."""
+    adres_onizleme_temizle()
+    layer = _get_or_create_adres_layer()
+
+    feat = QgsFeature(layer.fields())
+    feat.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(lng, lat)))
+
+    feat.setAttribute("il", adres_bilgisi.get("il", ""))
+    feat.setAttribute("ilce", adres_bilgisi.get("ilce", ""))
+    feat.setAttribute("mahalle", adres_bilgisi.get("mahalle", ""))
+    feat.setAttribute("yol", adres_bilgisi.get("yol", ""))
+    feat.setAttribute("kapiNo", adres_bilgisi.get("numarataj", ""))
+    feat.setAttribute("tamAdres", adres_bilgisi.get("tamAdres", ""))
+
+    layer.dataProvider().addFeatures([feat])
+    layer.updateExtents()
+    layer.triggerRepaint()
+
+    import qgis.utils
+    canvas = qgis.utils.iface.mapCanvas() if qgis.utils.iface else None
+
+    if canvas:
+        rect = QgsRectangle(lng - 0.001, lat - 0.001, lng + 0.001, lat + 0.001)
+        if layer.crs() != canvas.mapSettings().destinationCrs():
+            from qgis.core import QgsCoordinateTransform
+            xform = QgsCoordinateTransform(layer.crs(), canvas.mapSettings().destinationCrs(), QgsProject.instance())
+            try:
+                rect = xform.transformBoundingBox(rect)
+            except Exception:
+                pass
+
+        canvas.setExtent(rect)
+        canvas.refresh()
+
+    return layer
+
+
+def geojson_geometriye_zoom_yap(canvas, geom_dict: dict) -> None:
+    """GeoJSON sözlük verisini kullanarak haritada o kapsama zoom yapar ve canlı önizleme çizer."""
+    if not canvas or not geom_dict:
+        adres_onizleme_temizle()
+        return
+
+    try:
+        from qgis.core import QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsProject
+
+        qgs_geom = _dict_to_qgs_geometry(geom_dict)
+        if not qgs_geom or qgs_geom.isEmpty():
+            adres_onizleme_temizle()
+            return
+
+        # Önizlemeyi göster (öncekileri otomatik temizler)
+        adres_onizleme_goster(canvas, geom_dict)
+
+        rect = qgs_geom.boundingBox()
+        if rect.isEmpty():
+            center = qgs_geom.asPoint()
+            rect = rect.fromCenterAndSize(center, 0.002, 0.002)
+        else:
+            rect.scale(1.1)
+
+        # CRS dönüşümü (API her zaman EPSG:4326 dönüyor)
+        crs_src = QgsCoordinateReferenceSystem("EPSG:4326")
+        crs_dest = canvas.mapSettings().destinationCrs()
+        if crs_src != crs_dest:
+            xform = QgsCoordinateTransform(crs_src, crs_dest, QgsProject.instance())
+            rect = xform.transformBoundingBox(rect)
+
+        canvas.setExtent(rect)
+        canvas.refresh()
+    except Exception:
+        pass
 
 
 def parsele_zoom_yap(canvas, parsel: dict) -> None:

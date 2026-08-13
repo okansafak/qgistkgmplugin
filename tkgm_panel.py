@@ -15,8 +15,12 @@ from .ui_tkgm_panel import Ui_TKGMPanel
 from .workers import (
     IlWorker, IlceWorker, MahalleWorker,
     ParselWorker, ParselKoordinatWorker, ParselBlokVeBBWorker,
+    MaksIlWorker, MaksIlceWorker, MaksMahalleWorker, MaksYolWorker, MaksNumaratajWorker
 )
-from .layer_manager import parsel_katmana_ekle, bagimsiz_bolumleri_katmana_ekle, parsele_zoom_yap
+from .layer_manager import (
+    parsel_katmana_ekle, bagimsiz_bolumleri_katmana_ekle, parsele_zoom_yap,
+    adres_noktasi_katmana_ekle, geojson_geometriye_zoom_yap, adres_onizleme_temizle
+)
 from .map_tool import ParselTiklamaAraci
 
 
@@ -96,34 +100,53 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
 
         # İl listesini yükle
         self._load_iller()
+        
+        # Adres il listesini yükle
+        self._load_adres_iller()
 
     def set_metrics_client(self, metrics_client):
         self._metrics_client = metrics_client
+
+    def _start_worker(self, worker):
+        """Worker'ı güvenli şekilde başlatır ve listeye ekler.
+        Önce biten worker'ları listeden temizler."""
+        # Biten worker'ları temizle
+        self._workers = [w for w in self._workers if w and w.isRunning()]
+        self._workers.append(worker)
+        worker.start()
 
     # ─────────────────────────────────── Sinyal Bağlantıları ──────────────────
     def _connect_signals(self):
         """Tüm sinyal-slot bağlantılarını tek bir yerde kurar."""
         self.cmb_il.currentIndexChanged.connect(self._on_il_degisti)
         self.cmb_ilce.currentIndexChanged.connect(self._on_ilce_degisti)
+        self.cmb_mahalle.currentIndexChanged.connect(self._on_mahalle_degisti)
         self.btn_sorgula.clicked.connect(self._on_sorgula)
         self.btn_bina_bb.clicked.connect(self._on_bina_bb_sorgula)
         self.btn_tikla_ac.toggled.connect(self._on_tikla_toggle)
         self.btn_zoom.clicked.connect(self._on_zoom)
+
+        # Adres sekmesi sinyalleri
+        self.cmb_adres_il.currentIndexChanged.connect(self._on_adres_il_degisti)
+        self.cmb_adres_ilce.currentIndexChanged.connect(self._on_adres_ilce_degisti)
+        self.cmb_adres_mahalle.currentIndexChanged.connect(self._on_adres_mahalle_degisti)
+        self.cmb_adres_yol.currentIndexChanged.connect(self._on_adres_yol_degisti)
+        self.cmb_adres_numarataj.currentIndexChanged.connect(self._on_adres_numarataj_degisti)
+        self.btn_adres_sorgula.clicked.connect(self._on_adres_sorgula)
 
     # ──────────────────────────────────── İdari Birim Yükleme ─────────────────
     def _load_iller(self):
         self._durum("İller yükleniyor...")
         w = IlWorker()
         w.finished.connect(self._on_iller_yuklendi)
-        w.error.connect(lambda e: self._hata(self._kullanici_hata_mesaji(e, "İl listesi alınamadı")))
-        self._workers.append(w)
-        w.start()
+        w.error.connect(self._on_il_hata)
+        self._start_worker(w)
 
     def _on_iller_yuklendi(self, iller):
         self.cmb_il.clear()
         self.cmb_il.addItem("— İl seçin —", None)
         for il in sorted(iller, key=lambda x: _tr_sort_key(x.get("ad", ""))):
-            self.cmb_il.addItem(il["ad"], il["id"])
+            self.cmb_il.addItem(il["ad"], il)
         self.cmb_il.setEnabled(True)
         self.cmb_il.setPlaceholderText("")
         self._refresh_gunluk_sorgu_sayisi()
@@ -136,7 +159,19 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
         self.cmb_ilce.setEnabled(False)
         self.cmb_mahalle.setEnabled(False)
 
-        il_kodu = self.cmb_il.currentData()
+        il_data = self.cmb_il.currentData()
+        if not il_data:
+            adres_onizleme_temizle()
+            return
+
+        if isinstance(il_data, dict):
+            il_kodu = il_data.get("id") or il_data.get("kod")
+            if il_data.get("geometry"):
+                geojson_geometriye_zoom_yap(self.canvas, il_data.get("geometry"))
+        else:
+            il_kodu = il_data
+            adres_onizleme_temizle()
+
         if not il_kodu:
             return
 
@@ -144,15 +179,14 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
         self.cmb_ilce.addItem("Yükleniyor...", None)
         w = IlceWorker(il_kodu)
         w.finished.connect(self._on_ilceler_yuklendi)
-        w.error.connect(lambda e: self._hata(self._kullanici_hata_mesaji(e, "İlçe listesi alınamadı")))
-        self._workers.append(w)
-        w.start()
+        w.error.connect(self._on_ilce_hata)
+        self._start_worker(w)
 
     def _on_ilceler_yuklendi(self, ilceler):
         self.cmb_ilce.clear()
         self.cmb_ilce.addItem("— İlçe seçin —", None)
         for ilce in sorted(ilceler, key=lambda x: _tr_sort_key(x.get("ilceAdi", ""))):
-            self.cmb_ilce.addItem(ilce["ilceAdi"], ilce["ilceKodu"])
+            self.cmb_ilce.addItem(ilce["ilceAdi"], ilce)
         self.cmb_ilce.setEnabled(True)
         self._refresh_gunluk_sorgu_sayisi()
         self._track_metric("ilce_loaded", status="success", extra={"count": len(ilceler)})
@@ -162,7 +196,19 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
         self.cmb_mahalle.clear()
         self.cmb_mahalle.setEnabled(False)
 
-        ilce_kodu = self.cmb_ilce.currentData()
+        ilce_data = self.cmb_ilce.currentData()
+        if not ilce_data:
+            adres_onizleme_temizle()
+            return
+
+        if isinstance(ilce_data, dict):
+            ilce_kodu = ilce_data.get("ilceKodu") or ilce_data.get("id")
+            if ilce_data.get("geometry"):
+                geojson_geometriye_zoom_yap(self.canvas, ilce_data.get("geometry"))
+        else:
+            ilce_kodu = ilce_data
+            adres_onizleme_temizle()
+
         if not ilce_kodu:
             return
 
@@ -170,23 +216,32 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
         self.cmb_mahalle.addItem("Yükleniyor...", None)
         w = MahalleWorker(ilce_kodu)
         w.finished.connect(self._on_mahalleler_yuklendi)
-        w.error.connect(lambda e: self._hata(self._kullanici_hata_mesaji(e, "Mahalle listesi alınamadı")))
-        self._workers.append(w)
-        w.start()
+        w.error.connect(self._on_mahalle_hata)
+        self._start_worker(w)
 
     def _on_mahalleler_yuklendi(self, mahalleler):
         self.cmb_mahalle.clear()
         self.cmb_mahalle.addItem("— Mahalle seçin —", None)
         for mah in sorted(mahalleler, key=lambda x: _tr_sort_key(x.get("mahalleAdi", ""))):
-            self.cmb_mahalle.addItem(mah["mahalleAdi"], mah["mahalleKodu"])
+            self.cmb_mahalle.addItem(mah["mahalleAdi"], mah)
         self.cmb_mahalle.setEnabled(True)
         self._refresh_gunluk_sorgu_sayisi()
         self._track_metric("mahalle_loaded", status="success", extra={"count": len(mahalleler)})
         self._durum(f"{len(mahalleler)} mahalle yüklendi")
 
+    def _on_mahalle_degisti(self, idx):
+        mahalle_data = self.cmb_mahalle.currentData()
+        if not mahalle_data:
+            adres_onizleme_temizle()
+            return
+
+        if isinstance(mahalle_data, dict) and mahalle_data.get("geometry"):
+            geojson_geometriye_zoom_yap(self.canvas, mahalle_data.get("geometry"))
+
     # ──────────────────────────────────── Parsel Sorgulama ────────────────────
     def _on_sorgula(self):
-        mah_kodu = self.cmb_mahalle.currentData()
+        mah_data = self.cmb_mahalle.currentData()
+        mah_kodu = mah_data.get("mahalleKodu") if isinstance(mah_data, dict) else mah_data
         ada = self.txt_ada.text().strip()
         parsel = self.txt_parsel.text().strip()
 
@@ -206,8 +261,7 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
         w = ParselWorker(mah_kodu, ada, parsel)
         w.finished.connect(self._on_parsel_geldi)
         w.error.connect(self._on_parsel_hatasi)
-        self._workers.append(w)
-        w.start()
+        self._start_worker(w)
 
     def _sorgu_koordinat(self, lat, lng):
         self._durum(f"Koordinat sorgulanıyor: {lat:.6f}, {lng:.6f}")
@@ -217,10 +271,10 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
         w = ParselKoordinatWorker(lat, lng)
         w.finished.connect(self._on_parsel_geldi)
         w.error.connect(self._on_parsel_hatasi)
-        self._workers.append(w)
-        w.start()
+        self._start_worker(w)
 
     def _on_parsel_geldi(self, parsel: dict):
+        adres_onizleme_temizle()
         self.btn_sorgula.setEnabled(True)
         self._refresh_gunluk_sorgu_sayisi()
         self._son_parsel = parsel
@@ -291,7 +345,8 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
         self._hata(self._kullanici_hata_mesaji(hata, "Parsel bulunamadı"))
 
     def _on_bina_bb_sorgula(self):
-        mahalle_kodu = self.cmb_mahalle.currentData()
+        mah_data = self.cmb_mahalle.currentData()
+        mahalle_kodu = mah_data.get("mahalleKodu") if isinstance(mah_data, dict) else mah_data
         ada_no = self.txt_ada.text().strip()
         parsel_no = self.txt_parsel.text().strip()
 
@@ -335,8 +390,7 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
         w = ParselBlokVeBBWorker(mahalle_kodu, ada_no, parsel_no)
         w.finished.connect(self._on_bina_bb_listesi_geldi)
         w.error.connect(self._on_bina_bb_hatasi)
-        self._workers.append(w)
-        w.start()
+        self._start_worker(w)
 
     def _on_bina_bb_listesi_geldi(self, bloklar: list):
         self.btn_bina_bb.setEnabled(True)
@@ -617,6 +671,15 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
         self.lbl_durum.setText(f"⚠ {mesaj}")
         QMessageBox.warning(self, "TKGM Parsel", mesaj)
 
+    def _on_il_hata(self, e): self._hata(self._kullanici_hata_mesaji(e, "İl listesi alınamadı"))
+    def _on_ilce_hata(self, e): self._hata(self._kullanici_hata_mesaji(e, "İlçe listesi alınamadı"))
+    def _on_mahalle_hata(self, e): self._hata(self._kullanici_hata_mesaji(e, "Mahalle listesi alınamadı"))
+    def _on_adres_il_hata(self, e): self._hata(self._kullanici_hata_mesaji(e, "Adres il listesi alınamadı"))
+    def _on_adres_ilce_hata(self, e): self._hata(self._kullanici_hata_mesaji(e, "Adres ilçe listesi alınamadı"))
+    def _on_adres_mahalle_hata(self, e): self._hata(self._kullanici_hata_mesaji(e, "Adres mahalle listesi alınamadı"))
+    def _on_adres_yol_hata(self, e): self._hata(self._kullanici_hata_mesaji(e, "Adres yol listesi alınamadı"))
+    def _on_adres_numarataj_hata(self, e): self._hata(self._kullanici_hata_mesaji(e, "Adres numarataj listesi alınamadı"))
+
     def hideEvent(self, event):
         if self.btn_tikla_ac.isChecked():
             self.btn_tikla_ac.setChecked(False)
@@ -626,3 +689,200 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
         if self.btn_tikla_ac.isChecked():
             self.btn_tikla_ac.setChecked(False)
         super().closeEvent(event)
+
+    # ──────────────────────────────────── ADRES SEKMESİ İŞ MANTIĞI ───────────
+
+    def _load_adres_iller(self):
+        self._durum("Adres: İller yükleniyor...")
+        w = MaksIlWorker()
+        w.finished.connect(self._on_adres_iller_yuklendi)
+        w.error.connect(self._on_adres_il_hata)
+        self._start_worker(w)
+
+    def _on_adres_iller_yuklendi(self, iller):
+        self.cmb_adres_il.clear()
+        self.cmb_adres_il.addItem("— İl seçin —", None)
+        for il in sorted(iller, key=lambda x: _tr_sort_key(x.get("ad", ""))):
+            self.cmb_adres_il.addItem(il["ad"], il)
+        self.cmb_adres_il.setEnabled(True)
+        self.cmb_adres_il.setPlaceholderText("")
+        self._refresh_gunluk_sorgu_sayisi()
+        self._durum(f"Adres: {len(iller)} il yüklendi")
+
+    def _on_adres_il_degisti(self, idx):
+        self.cmb_adres_ilce.clear()
+        self.cmb_adres_mahalle.clear()
+        self.cmb_adres_yol.clear()
+        self.cmb_adres_numarataj.clear()
+        self.cmb_adres_ilce.setEnabled(False)
+        self.cmb_adres_mahalle.setEnabled(False)
+        self.cmb_adres_yol.setEnabled(False)
+        self.cmb_adres_numarataj.setEnabled(False)
+        self.btn_adres_sorgula.setEnabled(False)
+
+        il_data = self.cmb_adres_il.currentData()
+        if not il_data:
+            return
+
+        il_kodu = il_data.get("id")
+        geojson_geometriye_zoom_yap(self.canvas, il_data.get("geometry"))
+
+        self._durum("Adres: İlçeler yükleniyor...")
+        self.cmb_adres_ilce.addItem("Yükleniyor...", None)
+        w = MaksIlceWorker(il_kodu)
+        w.finished.connect(self._on_adres_ilceler_yuklendi)
+        w.error.connect(self._on_adres_ilce_hata)
+        self._start_worker(w)
+
+    def _on_adres_ilceler_yuklendi(self, ilceler):
+        self.cmb_adres_ilce.clear()
+        self.cmb_adres_ilce.addItem("— İlçe seçin —", None)
+        for ilce in sorted(ilceler, key=lambda x: _tr_sort_key(x.get("ad", ""))):
+            self.cmb_adres_ilce.addItem(ilce["ad"], ilce)
+        self.cmb_adres_ilce.setEnabled(True)
+        self._refresh_gunluk_sorgu_sayisi()
+        self._durum(f"Adres: {len(ilceler)} ilçe yüklendi")
+
+    def _on_adres_ilce_degisti(self, idx):
+        self.cmb_adres_mahalle.clear()
+        self.cmb_adres_yol.clear()
+        self.cmb_adres_numarataj.clear()
+        self.cmb_adres_mahalle.setEnabled(False)
+        self.cmb_adres_yol.setEnabled(False)
+        self.cmb_adres_numarataj.setEnabled(False)
+        self.btn_adres_sorgula.setEnabled(False)
+
+        ilce_data = self.cmb_adres_ilce.currentData()
+        if not ilce_data:
+            return
+
+        ilce_kodu = ilce_data.get("id")
+        geojson_geometriye_zoom_yap(self.canvas, ilce_data.get("geometry"))
+
+        self._durum("Adres: Mahalleler yükleniyor...")
+        self.cmb_adres_mahalle.addItem("Yükleniyor...", None)
+        w = MaksMahalleWorker(ilce_kodu)
+        w.finished.connect(self._on_adres_mahalleler_yuklendi)
+        w.error.connect(self._on_adres_mahalle_hata)
+        self._start_worker(w)
+
+    def _on_adres_mahalleler_yuklendi(self, mahalleler):
+        self.cmb_adres_mahalle.clear()
+        self.cmb_adres_mahalle.addItem("— Mahalle seçin —", None)
+        for mah in sorted(mahalleler, key=lambda x: _tr_sort_key(x.get("ad", ""))):
+            self.cmb_adres_mahalle.addItem(mah["ad"], mah)
+        self.cmb_adres_mahalle.setEnabled(True)
+        self._refresh_gunluk_sorgu_sayisi()
+        self._durum(f"Adres: {len(mahalleler)} mahalle yüklendi")
+
+    def _on_adres_mahalle_degisti(self, idx):
+        self.cmb_adres_yol.clear()
+        self.cmb_adres_numarataj.clear()
+        self.cmb_adres_yol.setEnabled(False)
+        self.cmb_adres_numarataj.setEnabled(False)
+        self.btn_adres_sorgula.setEnabled(False)
+
+        mahalle_data = self.cmb_adres_mahalle.currentData()
+        if not mahalle_data:
+            return
+
+        mahalle_kodu = mahalle_data.get("id")
+        geojson_geometriye_zoom_yap(self.canvas, mahalle_data.get("geometry"))
+
+        self._durum("Adres: Yollar yükleniyor...")
+        self.cmb_adres_yol.addItem("Yükleniyor...", None)
+        w = MaksYolWorker(mahalle_kodu)
+        w.finished.connect(self._on_adres_yollar_yuklendi)
+        w.error.connect(self._on_adres_yol_hata)
+        self._start_worker(w)
+
+    def _on_adres_yollar_yuklendi(self, yollar):
+        self.cmb_adres_yol.clear()
+        self.cmb_adres_yol.addItem("— Yol (Cadde/Sokak) seçin —", None)
+        for yol in sorted(yollar, key=lambda x: _tr_sort_key(x.get("ad", ""))):
+            self.cmb_adres_yol.addItem(yol["ad"], yol)
+        self.cmb_adres_yol.setEnabled(True)
+        self._refresh_gunluk_sorgu_sayisi()
+        self._durum(f"Adres: {len(yollar)} yol yüklendi")
+
+    def _on_adres_yol_degisti(self, idx):
+        self.cmb_adres_numarataj.clear()
+        self.cmb_adres_numarataj.setEnabled(False)
+        self.btn_adres_sorgula.setEnabled(False)
+
+        yol_data = self.cmb_adres_yol.currentData()
+        if not yol_data:
+            return
+
+        yol_kodu = yol_data.get("id")
+        geojson_geometriye_zoom_yap(self.canvas, yol_data.get("geometry"))
+
+        self._durum("Adres: Numaratajlar yükleniyor...")
+        self.cmb_adres_numarataj.addItem("Yükleniyor...", None)
+        w = MaksNumaratajWorker(yol_kodu)
+        w.finished.connect(self._on_adres_numaratajlar_yuklendi)
+        w.error.connect(self._on_adres_numarataj_hata)
+        self._start_worker(w)
+
+    def _on_adres_numaratajlar_yuklendi(self, numaratajlar):
+        self.cmb_adres_numarataj.clear()
+        self.cmb_adres_numarataj.addItem("— Numarataj seçin —", None)
+        for num in sorted(numaratajlar, key=lambda x: _tr_sort_key(x.get("ad", ""))):
+            # Koordinat verisini data olarak sakla
+            self.cmb_adres_numarataj.addItem(num["ad"], num)
+        self.cmb_adres_numarataj.setEnabled(True)
+        self._refresh_gunluk_sorgu_sayisi()
+        self._durum(f"Adres: {len(numaratajlar)} numarataj yüklendi")
+
+    def _on_adres_numarataj_degisti(self, idx):
+        num_data = self.cmb_adres_numarataj.currentData()
+        if num_data:
+            self.btn_adres_sorgula.setEnabled(True)
+            geojson_geometriye_zoom_yap(self.canvas, num_data.get("geometry"))
+        else:
+            self.btn_adres_sorgula.setEnabled(False)
+
+    def _on_adres_sorgula(self):
+        num_data = self.cmb_adres_numarataj.currentData()
+        if not num_data:
+            return
+
+        lat = num_data.get("lat")
+        lng = num_data.get("lng")
+
+        if not lat or not lng:
+            self._hata("Seçilen numaratajın koordinat verisi bulunamadı.")
+            return
+
+        il = self.cmb_adres_il.currentText()
+        ilce = self.cmb_adres_ilce.currentText()
+        mahalle = self.cmb_adres_mahalle.currentText()
+        yol = self.cmb_adres_yol.currentText()
+        kapiNo = num_data.get("ad", "")
+
+        tam_adres = f"{mahalle} Mah. {yol} Cad/Sok. No: {kapiNo} {ilce}/{il}"
+
+        self.grp_adres_sonuc.setVisible(True)
+        self.lbl_adres_tam.setText(tam_adres)
+        self.lbl_adres_koordinat.setText(f"Lat: {lat:.6f}, Lng: {lng:.6f}")
+
+        self._track_metric("adres_query", status="success", extra={
+            "il": il,
+            "ilce": ilce,
+        })
+        
+        try:
+            adres_bilgisi = {
+                "il": il,
+                "ilce": ilce,
+                "mahalle": mahalle,
+                "yol": yol,
+                "numarataj": kapiNo,
+                "tamAdres": tam_adres
+            }
+            adres_noktasi_katmana_ekle(lat, lng, adres_bilgisi)
+            self.lbl_adres_katman.setText("✅ Katmana eklendi ve yaklaşıldı")
+            self._durum("Adrese gidildi")
+        except Exception as e:
+            self._hata(f"Haritada gösterme hatası: {str(e)}")
+            self.lbl_adres_katman.setText("❌ Hata oluştu")

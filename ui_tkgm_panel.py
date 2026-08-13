@@ -8,9 +8,11 @@ from qgis.PyQt.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QComboBox, QLineEdit, QPushButton,
     QGroupBox, QGridLayout, QFrame, QScrollArea,
+    QTabWidget,
 )
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtGui import QFont
+from qgis.PyQt.QtGui import QFont, QIcon
+from qgis.core import QgsApplication
 
 def _get_qt_flag(scope, name, fallback_scope=None):
     if hasattr(Qt, scope):
@@ -62,6 +64,11 @@ STIL_BTN_ZOOM = (
     "QPushButton { background:#e65100; color:white; border-radius:4px; font-weight:bold; }"
     "QPushButton:hover { background:#bf360c; }"
 )
+STIL_BTN_ADRES = (
+    "QPushButton { background:#6a1b9a; color:white; border-radius:5px; font-weight:bold; }"
+    "QPushButton:hover { background:#4a148c; }"
+    "QPushButton:disabled { background:#aaa; }"
+)
 STIL_FORM_ELEMENTS = (
     "QComboBox, QLineEdit { background: #ffffff; color: #000000; padding: 4px; border: 1px solid #ccc; border-radius: 4px; }"
     "QComboBox:disabled, QLineEdit:disabled { background: #f0f0f0; color: #888; }"
@@ -82,6 +89,16 @@ STIL_UYARI = (
 STIL_DURUM = "color: #555; font-size: 11px; padding: 3px 0;"
 STIL_SORGU_SAYAC = "color: #2b4c7e; font-size: 11px; padding: 0 0 4px 0;"
 STIL_AKORDIYON_CONTAINER = "QWidget { background: #f7f9fa; border: 1px solid #d9e2ec; border-radius: 6px; }"
+STIL_ADRES_SONUC = (
+    "QLabel {"
+    " background:#e8f5e9;"
+    " border:1px solid #a5d6a7;"
+    " border-radius:4px;"
+    " color:#2e7d32;"
+    " padding:8px;"
+    " font-size:12px;"
+    "}"
+)
 
 # Sonuç panelinde gösterilecek satırlar
 SONUC_SATIRLARI = [
@@ -109,7 +126,6 @@ class Ui_TKGMPanel:
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setFrameShape(FrameNoFrame)
-        # Stil temizlendi - alt bileşenlerin (Combo Box) görünmesini bozan şey buydu
         
         # İçerik Widget'ı
         self.container = QWidget()
@@ -130,29 +146,27 @@ class Ui_TKGMPanel:
         # ── Başlık ───────────────────────────────────────────────────────
         self._build_baslik(ana)
 
-        # ── İdari Birim Seçimi ───────────────────────────────────────────
-        self._build_idari_birim(ana)
+        # ── QTabWidget — İki Sekme ────────────────────────────────────────
+        self.tab_widget = QTabWidget()
+        ana.addWidget(self.tab_widget)
 
-        # ── Ada / Parsel ─────────────────────────────────────────────────
-        self._build_ada_parsel(ana)
+        # ── Sekme 1: Parsel Sorgulama ─────────────────────────────────────
+        self._parsel_tab = QWidget()
+        self._parsel_tab.setStyleSheet(STIL_FORM_ELEMENTS)
+        parsel_layout = QVBoxLayout(self._parsel_tab)
+        parsel_layout.setContentsMargins(4, 8, 4, 4)
+        parsel_layout.setSpacing(8)
+        self._build_parsel_sekmesi(parsel_layout)
+        self.tab_widget.addTab(self._parsel_tab, QgsApplication.getThemeIcon("/mIconPolygonLayer.svg"), "Parsel Sorgulama")
 
-        # ── Sorgula Butonu ───────────────────────────────────────────────
-        self._build_sorgula_btn(ana)
-
-        # ── Ayraç ────────────────────────────────────────────────────────
-        cizgi = QFrame()
-        cizgi.setFrameShape(FrameHLine)
-        cizgi.setStyleSheet("color: #ccc;")
-        ana.addWidget(cizgi)
-
-        # ── Koordinat ile Sorgula ────────────────────────────────────────
-        self._build_tikla_grubu(ana)
-
-        # ── Sonuç Alanı ─────────────────────────────────────────────────
-        self._build_sonuc(ana)
-
-        # ── Bina/BB Sonuç Alanı ────────────────────────────────────────
-        self._build_bina_bb_sonuc(ana)
+        # ── Sekme 2: Adres Sorgulama ─────────────────────────────────────
+        self._adres_tab = QWidget()
+        self._adres_tab.setStyleSheet(STIL_FORM_ELEMENTS)
+        adres_layout = QVBoxLayout(self._adres_tab)
+        adres_layout.setContentsMargins(4, 8, 4, 4)
+        adres_layout.setSpacing(8)
+        self._build_adres_sekmesi(adres_layout)
+        self.tab_widget.addTab(self._adres_tab, QgsApplication.getThemeIcon("/mIconPointLayer.svg"), "Adres Sorgulama")
 
         ana.addStretch()
 
@@ -170,7 +184,7 @@ class Ui_TKGMPanel:
     # ================================================================
 
     def _build_baslik(self, layout):
-        baslik = QLabel("🗺 TKGM Parsel Sorgulama")
+        baslik = QLabel("TKGM Parsel & Adres Sorgulama")
         baslik_font = QFont()
         baslik_font.setPointSize(11)
         baslik_font.setBold(True)
@@ -178,6 +192,38 @@ class Ui_TKGMPanel:
         baslik.setAlignment(AlignCenter)
         baslik.setStyleSheet(STIL_BASLIK)
         layout.addWidget(baslik)
+
+    # ────────────────────────────────────────────────────────────────────
+    # Parsel Sekmesi İçeriği
+    # ────────────────────────────────────────────────────────────────────
+
+    def _build_parsel_sekmesi(self, layout):
+        """Parsel sekmesindeki tüm widget'ları oluşturur."""
+        # İdari Birim Seçimi
+        self._build_idari_birim(layout)
+
+        # Ada / Parsel
+        self._build_ada_parsel(layout)
+
+        # Sorgula Butonu
+        self._build_sorgula_btn(layout)
+
+        # Ayraç
+        cizgi = QFrame()
+        cizgi.setFrameShape(FrameHLine)
+        cizgi.setStyleSheet("color: #ccc;")
+        layout.addWidget(cizgi)
+
+        # Koordinat ile Sorgula
+        self._build_tikla_grubu(layout)
+
+        # Sonuç Alanı
+        self._build_sonuc(layout)
+
+        # Bina/BB Sonuç Alanı
+        self._build_bina_bb_sonuc(layout)
+
+        layout.addStretch()
 
     def _build_idari_birim(self, layout):
         grp = QGroupBox("İdari Birim Seçimi")
@@ -225,7 +271,8 @@ class Ui_TKGMPanel:
         layout.addWidget(grp)
 
     def _build_sorgula_btn(self, layout):
-        self.btn_sorgula = QPushButton("🔍  Parsel Sorgula")
+        self.btn_sorgula = QPushButton(" Parsel Sorgula")
+        self.btn_sorgula.setIcon(QgsApplication.getThemeIcon("/mActionIdentify.svg"))
         self.btn_sorgula.setMinimumHeight(36)
         self.btn_sorgula.setStyleSheet(STIL_BTN_SORGULA)
         layout.addWidget(self.btn_sorgula)
@@ -241,7 +288,8 @@ class Ui_TKGMPanel:
         vt.addWidget(aciklama)
 
         ht = QHBoxLayout()
-        self.btn_tikla_ac = QPushButton("🎯  Tıklama Modunu Aç")
+        self.btn_tikla_ac = QPushButton(" Tıklama Modunu Aç")
+        self.btn_tikla_ac.setIcon(QgsApplication.getThemeIcon("/mActionMapIdentification.svg"))
         self.btn_tikla_ac.setCheckable(True)
         self.btn_tikla_ac.setMinimumHeight(32)
         self.btn_tikla_ac.setStyleSheet(STIL_BTN_TIKLA)
@@ -266,13 +314,15 @@ class Ui_TKGMPanel:
             gs.addWidget(lbl_val, idx, 1)
             self._sonuc_etiketler[key] = lbl_val
 
-        self.btn_bina_bb = QPushButton("🏢  Bina/BB Listesi Sorgula")
+        self.btn_bina_bb = QPushButton(" Bina/BB Listesi Sorgula")
+        self.btn_bina_bb.setIcon(QgsApplication.getThemeIcon("/mActionOpenTable.svg"))
         self.btn_bina_bb.setMinimumHeight(34)
         self.btn_bina_bb.setStyleSheet(STIL_BTN_BINA_BB)
         gs.addWidget(self.btn_bina_bb, len(SONUC_SATIRLARI), 0, 1, 2)
 
         # Zoom butonu
-        self.btn_zoom = QPushButton("🔭  Parsele Git")
+        self.btn_zoom = QPushButton(" Parsele Git")
+        self.btn_zoom.setIcon(QgsApplication.getThemeIcon("/mActionZoomToSelected.svg"))
         self.btn_zoom.setMinimumHeight(30)
         self.btn_zoom.setStyleSheet(STIL_BTN_ZOOM)
         gs.addWidget(self.btn_zoom, len(SONUC_SATIRLARI) + 1, 0, 1, 2)
@@ -319,3 +369,100 @@ class Ui_TKGMPanel:
         vb.addWidget(self.bina_bb_scroll)
 
         layout.addWidget(self.grp_bina_bb)
+
+    # ────────────────────────────────────────────────────────────────────
+    # Adres Sekmesi İçeriği
+    # ────────────────────────────────────────────────────────────────────
+
+    def _build_adres_sekmesi(self, layout):
+        """Adres sekmesindeki tüm widget'ları oluşturur."""
+        # Açıklama
+        aciklama = QLabel(
+            "TKGM MAKS İdari Yapı veritabanından adres sorgulama.\n"
+            "İl → İlçe → Mahalle → Yol → Numarataj sırasıyla seçin."
+        )
+        aciklama.setWordWrap(True)
+        aciklama.setStyleSheet(STIL_ACIKLAMA)
+        layout.addWidget(aciklama)
+
+        # Adres dropdown'ları
+        self._build_adres_dropdowns(layout)
+
+        # Adrese Git butonu
+        self.btn_adres_sorgula = QPushButton(" Adres Sorgula")
+        self.btn_adres_sorgula.setIcon(QgsApplication.getThemeIcon("/mActionZoomToSelected.svg"))
+        self.btn_adres_sorgula.setMinimumHeight(36)
+        self.btn_adres_sorgula.setStyleSheet(STIL_BTN_ADRES)
+        self.btn_adres_sorgula.setEnabled(False)
+        layout.addWidget(self.btn_adres_sorgula)
+
+        # Sonuç alanı
+        self._build_adres_sonuc(layout)
+
+        layout.addStretch()
+
+    def _build_adres_dropdowns(self, layout):
+        grp = QGroupBox("Adres Bilgileri")
+        g = QGridLayout(grp)
+        g.setSpacing(5)
+
+        # İl
+        g.addWidget(QLabel("İl:"), 0, 0)
+        self.cmb_adres_il = QComboBox()
+        self.cmb_adres_il.setPlaceholderText("Yükleniyor...")
+        self.cmb_adres_il.setEnabled(False)
+        g.addWidget(self.cmb_adres_il, 0, 1)
+
+        # İlçe
+        g.addWidget(QLabel("İlçe:"), 1, 0)
+        self.cmb_adres_ilce = QComboBox()
+        self.cmb_adres_ilce.setPlaceholderText("Önce il seçin")
+        self.cmb_adres_ilce.setEnabled(False)
+        g.addWidget(self.cmb_adres_ilce, 1, 1)
+
+        # Mahalle
+        g.addWidget(QLabel("Mahalle:"), 2, 0)
+        self.cmb_adres_mahalle = QComboBox()
+        self.cmb_adres_mahalle.setPlaceholderText("Önce ilçe seçin")
+        self.cmb_adres_mahalle.setEnabled(False)
+        g.addWidget(self.cmb_adres_mahalle, 2, 1)
+
+        # Yol (Cadde/Sokak)
+        g.addWidget(QLabel("Yol:"), 3, 0)
+        self.cmb_adres_yol = QComboBox()
+        self.cmb_adres_yol.setPlaceholderText("Önce mahalle seçin")
+        self.cmb_adres_yol.setEnabled(False)
+        g.addWidget(self.cmb_adres_yol, 3, 1)
+
+        # Numarataj (Kapı No)
+        g.addWidget(QLabel("Kapı No:"), 4, 0)
+        self.cmb_adres_numarataj = QComboBox()
+        self.cmb_adres_numarataj.setPlaceholderText("Önce yol seçin")
+        self.cmb_adres_numarataj.setEnabled(False)
+        g.addWidget(self.cmb_adres_numarataj, 4, 1)
+
+        layout.addWidget(grp)
+
+    def _build_adres_sonuc(self, layout):
+        self.grp_adres_sonuc = QGroupBox("Adres Sonucu")
+        self.grp_adres_sonuc.setVisible(False)
+        vs = QVBoxLayout(self.grp_adres_sonuc)
+        vs.setSpacing(4)
+
+        self.lbl_adres_tam = QLabel("")
+        self.lbl_adres_tam.setWordWrap(True)
+        self.lbl_adres_tam.setTextInteractionFlags(TextSelectableByMouse)
+        self.lbl_adres_tam.setStyleSheet(STIL_ADRES_SONUC)
+        vs.addWidget(self.lbl_adres_tam)
+
+        self.lbl_adres_koordinat = QLabel("")
+        self.lbl_adres_koordinat.setTextInteractionFlags(TextSelectableByMouse)
+        self.lbl_adres_koordinat.setStyleSheet(STIL_ACIKLAMA)
+        vs.addWidget(self.lbl_adres_koordinat)
+
+        self.lbl_adres_katman = QLabel()
+        self.lbl_adres_katman.setStyleSheet(STIL_KATMAN)
+        self.lbl_adres_katman.setAlignment(AlignCenter)
+        vs.addWidget(self.lbl_adres_katman)
+
+        layout.addWidget(self.grp_adres_sonuc)

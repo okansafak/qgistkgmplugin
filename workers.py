@@ -118,3 +118,83 @@ class ParselBlokVeBBWorker(QThread):
             self.finished.emit(get_parsel_blok_ve_bb_listesi(self.mahalle_kodu, self.ada_no, self.parsel_no))
         except Exception as e:
             self.error.emit(str(e))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MAKS İdari Yapı Workers (Adres Sorgulama)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class MaksIlWorker(QThread):
+    finished = pyqtSignal(list)
+    error = pyqtSignal(str)
+
+    def run(self):
+        try:
+            from .tkgm_api import get_maks_il_listesi
+            self.finished.emit(get_maks_il_listesi())
+        except Exception as e:
+            self.error.emit(str(e))
+
+
+class MaksIlceWorker(QThread):
+    finished = pyqtSignal(list)
+    error = pyqtSignal(str)
+
+    def __init__(self, il_id):
+        super().__init__()
+        self.il_id = il_id
+
+    def run(self):
+        try:
+            from .tkgm_api import get_maks_ilce_listesi
+            self.finished.emit(get_maks_ilce_listesi(self.il_id))
+        except Exception as e:
+            self.error.emit(str(e))
+
+
+class MaksMahalleWorker(QThread):
+    finished = pyqtSignal(list)
+    error = pyqtSignal(str)
+
+    def __init__(self, ilce_id):
+        super().__init__()
+        self.ilce_id = ilce_id
+
+    def run(self):
+        try:
+            from .tkgm_api import get_maks_mahalle_listesi
+            self.finished.emit(get_maks_mahalle_listesi(self.ilce_id))
+        except Exception as e:
+            self.error.emit(str(e))
+
+
+class MaksYolWorker(QThread):
+    finished = pyqtSignal(list)
+    error = pyqtSignal(str)
+
+    def __init__(self, mahalle_id):
+        super().__init__()
+        self.mahalle_id = mahalle_id
+
+    def run(self):
+        try:
+            from .tkgm_api import get_maks_yol_listesi
+            self.finished.emit(get_maks_yol_listesi(self.mahalle_id))
+        except Exception as e:
+            self.error.emit(str(e))
+
+
+class MaksNumaratajWorker(QThread):
+    finished = pyqtSignal(list)
+    error = pyqtSignal(str)
+
+    def __init__(self, yol_id):
+        super().__init__()
+        self.yol_id = yol_id
+
+    def run(self):
+        try:
+            from .tkgm_api import get_maks_numarataj_listesi
+            self.finished.emit(get_maks_numarataj_listesi(self.yol_id))
+        except Exception as e:
+            self.error.emit(str(e))

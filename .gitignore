@@ -12,3 +12,4 @@ build/
 .idea/
 .vscode/
 *.orig
+test_*.py

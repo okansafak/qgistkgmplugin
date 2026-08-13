@@ -151,23 +151,27 @@ def _parse_feature_collection(data: dict, tip: str) -> list:
         result = []
         for f in data["features"]:
             props = f.get("properties") or {}
+            geom = f.get("geometry") or {}
             if tip == "il":
                 result.append({
                     "id": props.get("id"),
                     "ad": props.get("text") or props.get("ad") or props.get("name", ""),
                     "kod": props.get("id"),
+                    "geometry": geom,
                 })
             elif tip == "ilce":
                 result.append({
                     "ilceKodu": props.get("id"),
                     "ilceAdi": props.get("text") or props.get("ilceAdi") or props.get("ad", ""),
                     "ilKodu": props.get("ilId"),
+                    "geometry": geom,
                 })
             elif tip == "mahalle":
                 result.append({
                     "mahalleKodu": props.get("id"),
                     "mahalleAdi": props.get("text") or props.get("mahalleAdi") or props.get("ad", ""),
                     "ilceKodu": props.get("ilceId"),
+                    "geometry": geom,
                 })
         return result
     if isinstance(data, list):
@@ -434,3 +438,81 @@ def get_parsel_blok_ve_bb_listesi(mahalle_kodu, ada_no, parsel_no) -> list:
         except Exception:
             blok["bagimsizBolumler"] = []
     return bloklar
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MAKS İdari Yapı API (Adres Sorgulama)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+MAKS_API_BASE = "https://cbsapi.tkgm.gov.tr/megsiswebapi.v3.1/api/maksIdariYapi"
+
+
+def _parse_maks_features(data: dict) -> list:
+    """MAKS GeoJSON FeatureCollection'dan text/id/geometry listesi çıkarır."""
+    if isinstance(data, str):
+        data = json.loads(data)
+    features = []
+    for feature in (data.get("features") or []):
+        props = feature.get("properties") or {}
+        geom = feature.get("geometry") or {}
+        item = {
+            "ad": str(props.get("text") or "").strip(),
+            "id": str(props.get("id") or "").strip(),
+        }
+        # Geometri bilgisini de taşı (numaratajda Point koordinatları lazım)
+        if geom.get("type") == "Point" and geom.get("coordinates"):
+            coords = geom["coordinates"]
+            item["lng"] = float(coords[0])
+            item["lat"] = float(coords[1])
+        item["geometry"] = geom
+        features.append(item)
+    return features
+
+
+def get_maks_il_listesi() -> list:
+    """MAKS il listesini döner: [{"ad": "Adana", "id": "{GUID}", ...}, ...]"""
+    url = f"{MAKS_API_BASE}/illiste"
+    _validate_url(url)
+    data = _get(url)
+    _increment_daily_query_count()
+    return _parse_maks_features(data)
+
+
+def get_maks_ilce_listesi(il_id: str) -> list:
+    """MAKS ilçe listesini döner."""
+    encoded_id = urllib.parse.quote(str(il_id), safe="")
+    url = f"{MAKS_API_BASE}/ilceliste/{encoded_id}"
+    _validate_url(url)
+    data = _get(url)
+    _increment_daily_query_count()
+    return _parse_maks_features(data)
+
+
+def get_maks_mahalle_listesi(ilce_id: str) -> list:
+    """MAKS mahalle listesini döner."""
+    encoded_id = urllib.parse.quote(str(ilce_id), safe="")
+    url = f"{MAKS_API_BASE}/mahalleliste/{encoded_id}"
+    _validate_url(url)
+    data = _get(url)
+    _increment_daily_query_count()
+    return _parse_maks_features(data)
+
+
+def get_maks_yol_listesi(mahalle_id: str) -> list:
+    """MAKS yol (cadde/sokak) listesini döner."""
+    encoded_id = urllib.parse.quote(str(mahalle_id), safe="")
+    url = f"{MAKS_API_BASE}/yolliste/{encoded_id}"
+    _validate_url(url)
+    data = _get(url)
+    _increment_daily_query_count()
+    return _parse_maks_features(data)
+
+
+def get_maks_numarataj_listesi(yol_id: str) -> list:
+    """MAKS numarataj (kapı no) listesini döner. Her eleman lat/lng içerir."""
+    encoded_id = urllib.parse.quote(str(yol_id), safe="")
+    url = f"{MAKS_API_BASE}/numaratajliste/{encoded_id}"
+    _validate_url(url)
+    data = _get(url)
+    _increment_daily_query_count()
+    return _parse_maks_features(data)

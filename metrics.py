@@ -54,10 +54,12 @@ class SupabaseMetricsClient:
             self.endpoint = f"{SUPABASE_URL.rstrip('/')}/rest/v1/events"
 
         self._queue = []
+        self._stopped = False
         self._timer = QTimer()
         self._timer.setSingleShot(True)
-        self._timer.timeout.connect(self.flush)
+        self._timer.timeout.connect(self._on_timer_flush)
         self._content_type_header = _get_content_type_header_enum()
+        self._pending_replies = []
 
     def is_configured(self) -> bool:
         return bool(self.endpoint and SUPABASE_ANON_KEY.strip())
@@ -85,6 +87,8 @@ class SupabaseMetricsClient:
         count: int = 1,
         extra: dict = None,
     ) -> None:
+        if self._stopped:
+            return
         if not self.is_enabled() or not self.is_configured():
             return
 
@@ -109,14 +113,55 @@ class SupabaseMetricsClient:
 
         self._queue.append(payload)
         if len(self._queue) >= self.batch_size:
-            self._timer.stop()
             self.flush()
             return
 
-        if not self._timer.isActive():
-            self._timer.start(self.flush_ms)
+        self._start_timer()
+
+    def _start_timer(self):
+        """Timer'ı güvenli şekilde başlatır."""
+        if self._stopped:
+            return
+        try:
+            if self._timer and not self._timer.isActive():
+                self._timer.start(self.flush_ms)
+        except (RuntimeError, AttributeError):
+            pass
+
+    def _on_timer_flush(self):
+        """Timer timeout slot'u — lambda kullanmadan bağlanır."""
+        self.flush()
+
+    def stop(self) -> None:
+        """Eklenti kapanırken tüm kaynakları temizler."""
+        self._stopped = True
+        try:
+            if self._timer:
+                self._timer.stop()
+                try:
+                    self._timer.timeout.disconnect()
+                except Exception:
+                    pass
+                self._timer.deleteLater()
+                self._timer = None
+        except (RuntimeError, AttributeError):
+            pass
+
+        # Kalan verileri gönder
+        self.flush()
+
+        # Bekleyen reply'leri temizle
+        for reply in self._pending_replies:
+            try:
+                reply.finished.disconnect()
+                reply.abort()
+                reply.deleteLater()
+            except Exception:
+                pass
+        self._pending_replies.clear()
 
     def flush(self) -> None:
+        """Kalan tüm olayları gönderir."""
         if not self._queue or not self.is_configured():
             return
 
@@ -136,22 +181,34 @@ class SupabaseMetricsClient:
 
             body = QByteArray(json.dumps(batch, ensure_ascii=False).encode("utf-8"))
             reply = QgsNetworkAccessManager.instance().post(req, body)
-            reply.finished.connect(lambda: self._on_flush_finished(reply, batch))
+            self._pending_replies.append(reply)
+            reply.finished.connect(self._make_reply_handler(reply, batch))
         except Exception as e:
             # Gönderim hazırlığında hata olursa batch'i kaybetme.
-            self._queue = batch + self._queue
-            self._log(f"Metrik flush hazırlığı başarısız: {e}", warning=True)
-            if not self._timer.isActive():
-                self._timer.start(self.flush_ms)
+            if not self._stopped:
+                self._queue = batch + self._queue
+                self._log(f"Metrik flush hazırlığı başarısız: {e}", warning=True)
+                self._start_timer()
+
+    def _make_reply_handler(self, reply, batch):
+        """Her reply için ayrı bir slot üretir (lambda yerine closure)."""
+        def handler():
+            self._on_flush_finished(reply, batch)
+        return handler
 
     def _on_flush_finished(self, reply, batch) -> None:
         try:
+            if reply in self._pending_replies:
+                self._pending_replies.remove(reply)
+
+            if self._stopped:
+                return
+
             has_error = int(reply.error()) != 0
             if has_error:
                 self._queue = batch + self._queue
                 self._log(f"Metrik gönderimi başarısız: {reply.errorString()}", warning=True)
-                if not self._timer.isActive():
-                    self._timer.start(self.flush_ms)
+                self._start_timer()
                 return
 
             attr = getattr(getattr(QNetworkRequest, "Attribute", QNetworkRequest), "HttpStatusCodeAttribute")
@@ -159,16 +216,18 @@ class SupabaseMetricsClient:
             if status is not None and int(status) >= 400:
                 self._queue = batch + self._queue
                 self._log(f"Metrik gönderimi HTTP hatası: {status}", warning=True)
-                if not self._timer.isActive():
-                    self._timer.start(self.flush_ms)
+                self._start_timer()
                 return
         except Exception as e:
-            self._queue = batch + self._queue
-            self._log(f"Metrik yanıt işleme hatası: {e}", warning=True)
-            if not self._timer.isActive():
-                self._timer.start(self.flush_ms)
+            if not self._stopped:
+                self._queue = batch + self._queue
+                self._log(f"Metrik yanıt işleme hatası: {e}", warning=True)
+                self._start_timer()
         finally:
-            reply.deleteLater()
+            try:
+                reply.deleteLater()
+            except Exception:
+                pass
 
     def _log(self, message: str, warning: bool = False) -> None:
         level = _qgis_log_level_warning() if warning else _qgis_log_level_info()

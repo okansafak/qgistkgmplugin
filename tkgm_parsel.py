@@ -219,20 +219,52 @@ class TKGMParselPlugin:
     def unload(self):
         """Eklenti kaldırıldığında temizlik yapar."""
         try:
-            self.metrics.flush()
+            self.metrics.stop()
         except Exception:
             pass  # nosec B110
 
         self.iface.removePluginMenu("&TKGM Parsel", self.action)
         self.iface.removeToolBarIcon(self.action)
 
+        try:
+            from .layer_manager import adres_onizleme_temizle
+            adres_onizleme_temizle()
+        except Exception:
+            pass
+
         if self.panel:
             # Eklenti reload edilirken harita aracının takılı kalmasını önle
-            if self.panel.btn_tikla_ac.isChecked():
+            if getattr(self.panel, "btn_tikla_ac", None) and self.panel.btn_tikla_ac.isChecked():
                 self.panel.btn_tikla_ac.setChecked(False)
             
             self.iface.removeDockWidget(self.panel)
+            
+            # Tüm arkaplan iş parçacıklarının sinyallerini kes
+            # deleteLater ÇAĞIRMA — Qt event loop'ta erişim ihlali yapıyor
+            if hasattr(self.panel, "_workers"):
+                for w in self.panel._workers:
+                    if w:
+                        try:
+                            w.finished.disconnect()
+                        except Exception:
+                            pass
+                        try:
+                            w.error.disconnect()
+                        except Exception:
+                            pass
+                        if w.isRunning():
+                            try:
+                                w.quit()
+                                w.wait(200)
+                            except Exception:
+                                pass
+                self.panel._workers.clear()
+            
+            self.panel.setParent(None)
             self.panel = None
+
+        if self.action:
+            self.action = None
 
     def _panel_toggle(self, checked: bool):
         """Paneli aç/kapat."""
