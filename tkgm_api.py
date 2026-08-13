@@ -216,6 +216,52 @@ def get_mahalle_listesi(ilce_kodu) -> list:
     return _parse_feature_collection(data, "mahalle")
 
 
+def _parse_alan(raw) -> float:
+    """Alan (area) değerini locale-bağımsız olarak float'a çevirir.
+
+    TKGM API alan değerini number veya string olarak dönebilir.
+    Desteklenen formatlar:
+      - int/float  : 4483.39  → 4483.39  (JSON number)
+      - "4483.39"  : nokta ondalık        → 4483.39
+      - "4483,39"  : virgül ondalık       → 4483.39
+      - "4.483,39" : Türkçe format        → 4483.39
+      - "4,483.39" : İngilizce format     → 4483.39
+    """
+    if raw is None:
+        return 0.0
+
+    # Zaten sayısal ise doğrudan kullan
+    if isinstance(raw, (int, float)):
+        return float(raw)
+
+    alan_str = str(raw).strip()
+    if not alan_str:
+        return 0.0
+
+    has_dot = "." in alan_str
+    has_comma = "," in alan_str
+
+    if has_dot and has_comma:
+        # Her iki ayraç da var — sonuncusu ondalık ayracıdır
+        last_dot = alan_str.rfind(".")
+        last_comma = alan_str.rfind(",")
+        if last_comma > last_dot:
+            # Türkçe format: "4.483,39" → nokta=binlik, virgül=ondalık
+            alan_str = alan_str.replace(".", "").replace(",", ".")
+        else:
+            # İngilizce format: "4,483.39" → virgül=binlik, nokta=ondalık
+            alan_str = alan_str.replace(",", "")
+    elif has_comma and not has_dot:
+        # Yalnız virgül var: "4483,39" → virgül ondalık ayracıdır
+        alan_str = alan_str.replace(",", ".")
+    # Yalnız nokta varsa veya hiç ayraç yoksa → zaten standart format
+
+    try:
+        return float(alan_str)
+    except ValueError:
+        return 0.0
+
+
 def _parse_gittigi_parseller(raw_liste) -> list:
     """gittigiParselListe alanından hedef parselleri çıkarır."""
     if raw_liste is None:
@@ -261,12 +307,8 @@ def _parse_parsel_feature(data: dict, mahalle_kodu=None, ada_no=None, parsel_no=
     gittigi_liste_raw = props.get("gittigiParselListe")
     gittigi_parseller = _parse_gittigi_parseller(gittigi_liste_raw)
 
-    # Alan temizle
-    alan_str = str(props.get("alan") or "0")
-    try:
-        alan = float(alan_str.replace(".", "").replace(",", "."))
-    except ValueError:
-        alan = 0.0
+    # Alan temizle (locale-bağımsız)
+    alan = _parse_alan(props.get("alan"))
 
     # Merkez nokta hesapla
     center_lat, center_lng = 0.0, 0.0
