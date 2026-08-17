@@ -866,10 +866,17 @@ class TKGMPanel(QDockWidget, Ui_TKGMPanel):
         self.lbl_adres_tam.setText(tam_adres)
         self.lbl_adres_koordinat.setText(f"Lat: {lat:.6f}, Lng: {lng:.6f}")
 
-        self._track_metric("adres_query", status="success", extra={
-            "il": il,
-            "ilce": ilce,
-        })
+        self._track_metric(
+            "adres_query",
+            status="success",
+            city=il,
+            district=ilce,
+            neighborhood=mahalle,
+            extra={
+                "yol": yol,
+                "kapiNo": kapiNo
+            }
+        )
         
         try:
             adres_bilgisi = {
